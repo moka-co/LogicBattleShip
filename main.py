@@ -93,7 +93,6 @@ def main():
     cnf = init_empty_board()
     cells = add_random_boat(cnf)
     cnf = add_patrol_boat_constraints(cnf)
-    return cnf
 
 
 

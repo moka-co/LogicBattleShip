@@ -42,6 +42,16 @@ The main challenges for an agent are:
 
 Sinking an opponent ship may be advantageous because sinking it not only advances towards the conditional victory, but also shows the tiles around the ship that logically cannot contain a ship.
 
+---
+
+**Multiplayer**
+
+The agent maintains two separate boards:
+- Their own board, fully observable that contains the ship placements and which tiles the opponent has shot
+- The opponent's board: partially observable, contains only the tiles the agent has shot, labeled as $Hit$ or $Miss$; all other tiles remain hidden ($H_{i,j}$ is true)
+
+The KB reasoning and SAT queries operate exclusively on the opponent's board.
+
 ## Propositional Vocabulary
 
 ### Ships and Environment
@@ -119,6 +129,58 @@ If the agent shot and horizontal neighbours are misses, then the ship must be ve
 - $Sunk_{Submarine_{v,i,j}} \iff (Hit_{i,j} \land Hit_{i+1,j} \land Hit_{i+2,j})$
 
 
+**AllPartsSunk Consequences**
 Once you've hit all parts of a ship, you know the surrounding area is empty:
-- $AllPartsSunk_{PatrolBoat} \implies \bigwedge_{tiles\ adjacent\ to\ PatrolBoat} \neg SP_{tile}$
+- PatrolBoat horizontal at (i,j):
+$SunkPB_{h,i,j}  ⟹  ¬SP_{i,j−1}∧¬SP_{i,j+2}∧¬SP_{i−1,j}∧¬SP_{i−1,j+1}∧¬SP_{i+1,j}∧¬SP_{i+1,j+1}$
+- PatrolBoat vertical at (i,j):
+$Sunk_{PB_{v,i,j}} \implies \neg SP_{i-1,j} \land \neg SP_{i+2,j} \land \neg SP_{i,j-1} \land \neg SP_{i+1,j-1} \land \neg SP_{i,j+1} \land \neg SP_{i+1,j+1}$
+- Submarine horizontal at (i,j): $Sunk_{SM_{h,i,j}} \implies \neg SP_{i,j-1} \land \neg SP_{i,j+3} \land \neg SP_{i-1,j} \land \neg SP_{i-1,j+1} \land \neg SP_{i-1,j+2} \land \neg SP_{i+1,j} \land \neg SP_{i+1,j+1} \land \neg SP_{i+1,j+2}$
+- Submarine vertical at (i,j):
+$Sunk_{SM_{v,i,j}} \implies \neg SP_{i-1,j} \land \neg SP_{i+3,j} \land \neg SP_{i,j-1} \land \neg SP_{i+1,j-1} \land \neg SP_{i+2,j-1} \land \neg SP_{i,j+1} \land \neg SP_{i+1,j+1} \land \neg SP_{i+2,j+1}$
 
+
+---
+
+## Knowledge Base
+- Constraint: propositional logic with PySAT as logic 
+- The agent uses a SAT solver to look for tiles that are shot, if that it tries to shoot adjacent tiles using logic. Otherwise it shot at random.
+- At each turn the KB is updated and the new information is added to the Knowledge Base
+
+**KB update after each shot**:
+- On a miss: $\text{Assert: } Miss_{i,j}$ which immediately entails: $¬SP_{i,j}$
+- On a hit: $\text{Assert: } Hit_{i,j}$ which immediately entails: $SP_{i,j}$
+- Additionally, after every shot: $\text{Assert: } Shot_{i,j}$
+
+The KB grows monotonically, facts are only added never retracted since observations in Battleship are permanent.
+
+## Agent Strategy
+Formally, at each turn the agent must select a tile $(i,j)$ such that $\neg Shot_{i,j}$ (not yet shot).
+- If exists at least one $Hit_{i,j}$ whose ship is not sunk yet, the agent queries the SAT solver to find tiles that could contain a ship given the current KB: $KB \models SP_{i,j}$ 
+    - This is check via entailment: a tile is entailed to contain a ship if and only if $KB \land \neg SP_{i,j}$ is UNSATISFIABLE. If the solver returns UNSAT (e.g. () ), then $(i,j)$ must be a ship part and is the next shot
+    - Note: technically you can't really know until you hit, for instance the solver could still choose an empty tile, however that is still a good candidate so we can assume that this entailment logically find a tile that must contain a ship part.
+- If no such tile exists, use an heuristic to shot the next tile. The baseline is randomly uniform, see Heuristics section.
+
+**Heuristics**:
+- Randomly uniform: $Choose(i,j) \text{ uniformly from } \{(i,j)| \neg Shot_{i,j}\}$
+- Every Other Two: at each step, if $Hit(i,j)$ and $\neg SP(i,j)$ then choose either $Choose(i+2,j)$ or $Choose(i,j+2)$ if the choosen coordinates are inside the grid. If there is not previously hitten tiles, start from $(0,0)$. 
+
+
+**SAT Query**:
+
+At each turn, for every unshot tile $(i,j)$, the agents submits: $SOLVE(KB \cup \{\neg SP_{i,j}\})$
+- If $UNSAT \to SP_{i,j}$ is entailed $\to$ shoot(i,j)
+- If $SAT \to SP_{i,j}$ is not guaranteed $\to$ skip (use heuristic)
+
+## Tech Stack
+- PySAT for logic solver 
+- PyGame for the game interface and multiplayer (agent vs agent and local player vs agent)
+
+## Evaluation
+- Baseline: pure random
+- Compare baseline vs every other two
+- Metrics: average turns to win and hit rate over 1000 games
+
+
+## Conversion to CNF
+- A a tile either contains a ShipPart or is empty: $(SP_{i,j} \land \neg E_{i,j}) \lor (\neg SP_{i,j} \land E_{i,j})$ applying distributed property (distribute the outer OR over inner conunctions) becomes $(SP_{i,j} \lor E_{i,j}) \land (\neg SP_{i,j} \lor \neg E_{i,j}))$
