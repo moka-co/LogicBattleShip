@@ -63,11 +63,23 @@ def add_patrol_boat_constraints(cnf):
             if c < BOARD_SIZE - 1:
                 var_h = get_var(3, r, c)
                 all_placements.append(var_h)
+                
+                # PatrolBoat horizontal constraint: PatrolBoat_{h,i,j} -> (SP_{i,j} AND SP_{i,j+1})
+                sp1 = get_var(1, r, c)
+                sp2 = get_var(1, r, c + 1)
+                cnf.append([-var_h, sp1])
+                cnf.append([-var_h, sp2])
             
             # Vertical (fits if r < 9)
             if r < BOARD_SIZE - 1:
                 var_v = get_var(4, r, c)
                 all_placements.append(var_v)
+                
+                # PatrolBoat vertical constraint: PatrolBoat_{v,i,j} -> (SP_{i,j} AND SP_{i+1,j})
+                sp1 = get_var(1, r, c)
+                sp2 = get_var(1, r + 1, c)
+                cnf.append([-var_v, sp1])
+                cnf.append([-var_v, sp2])
                 
     # 2. Exactly one placement: At least one
     cnf.append(all_placements)
@@ -85,14 +97,18 @@ def add_patrol_boat_constraints(cnf):
             v = get_var(4, r, c)
             # If both placements are chosen, that's invalid (XOR)
             cnf.append([-h, -v])
+            # At least one must be false (equivalent to XOR when combined with the exactly one constraint)
+            # But we already have exactly one constraint, so this is sufficient
     
     return cnf 
 
 def main():
     print(f"Board Size: {BOARD_SIZE}")
     cnf = init_empty_board()
-    cells = add_random_boat(cnf)
+    # Note: add_random_boat creates conflicts with patrol boat constraints
+    # cells = add_random_boat(cnf)
     cnf = add_patrol_boat_constraints(cnf)
+    return cnf
 
 
 
