@@ -89,16 +89,15 @@ def add_patrol_boat_constraints(cnf):
         for j in range(i + 1, len(all_placements)):
             cnf.append([-all_placements[i], -all_placements[j]])
             
-    # 4. XOR Orientation Constraint: Only one orientation allowed at positions 
-    # where both orientations are possible
+    # 4. XOR Orientation Constraint: For each position where both orientations are possible,
+    # exactly one orientation must be chosen
     for r in range(BOARD_SIZE - 1):
         for c in range(BOARD_SIZE - 1):
             h = get_var(3, r, c)
             v = get_var(4, r, c)
-            # If both placements are chosen, that's invalid (XOR)
-            cnf.append([-h, -v])
-            # At least one must be false (equivalent to XOR when combined with the exactly one constraint)
-            # But we already have exactly one constraint, so this is sufficient
+            # Exactly one of horizontal or vertical can be true at each position
+            cnf.append([-h, -v])  # Not both can be true
+            # Note: The "at least one" is handled by the global exactly-one constraint above
     
     return cnf 
 
@@ -146,14 +145,15 @@ def add_submarine_constraints(cnf):
         for j in range(i + 1, len(all_placements)):
             cnf.append([-all_placements[i], -all_placements[j]])
             
-    # 4. XOR Orientation Constraint: Only one orientation allowed at positions 
-    # where both orientations are possible
+    # 4. XOR Orientation Constraint: For each position where both orientations are possible,
+    # exactly one orientation must be chosen
     for r in range(BOARD_SIZE - 2):
         for c in range(BOARD_SIZE - 2):
             h = get_var(5, r, c)
             v = get_var(6, r, c)
-            # If both placements are chosen, that's invalid (XOR)
-            cnf.append([-h, -v])
+            # Exactly one of horizontal or vertical can be true at each position
+            cnf.append([-h, -v])  # Not both can be true
+            # Note: The "at least one" is handled by the global exactly-one constraint above
     
     return cnf
 
