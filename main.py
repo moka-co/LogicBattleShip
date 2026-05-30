@@ -51,8 +51,8 @@ def add_random_boat(board_cnf, boat_type="PatrolBoat"):
 
 def add_patrol_boat_constraints(cnf):
     # Variables: 
-    # PB_h starts at 301. (r, c) where c < 9
-    # PB_v starts at 400 (offset for vertical)
+    # Type 3 = Patrol Boat Horizontal placement
+    # Type 4 = Patrol Boat Vertical placement
     
     all_placements = []
     
@@ -77,14 +77,13 @@ def add_patrol_boat_constraints(cnf):
         for j in range(i + 1, len(all_placements)):
             cnf.append([-all_placements[i], -all_placements[j]])
             
-    # 4. XOR Orientation Constraint: (NOT PBv AND PBh) OR (PBv AND NOT PBh)
-    # This applies if a boat is placed at (r, c) in both orientations
+    # 4. XOR Orientation Constraint: Only one orientation allowed at positions 
+    # where both orientations are possible
     for r in range(BOARD_SIZE - 1):
         for c in range(BOARD_SIZE - 1):
             h = get_var(3, r, c)
             v = get_var(4, r, c)
-            # (h OR v) AND (-h OR -v)
-            cnf.append([h, v])
+            # If both placements are chosen, that's invalid (XOR)
             cnf.append([-h, -v])
     
     return cnf 
@@ -94,6 +93,7 @@ def main():
     cnf = init_empty_board()
     cells = add_random_boat(cnf)
     cnf = add_patrol_boat_constraints(cnf)
+    return cnf
 
 
 
