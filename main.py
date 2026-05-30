@@ -281,14 +281,10 @@ def add_non_adjacent_constraints(cnf):
 def main():
     print(f"Board Size: {BOARD_SIZE}")
     cnf = init_empty_board()
-    # Note: add_random_boat creates conflicts with patrol boat constraints
-    # cells = add_random_boat(cnf)
     cnf = add_patrol_boat_constraints(cnf)
     cnf = add_submarine_constraints(cnf)
     cnf = add_non_adjacent_constraints(cnf)
     return cnf
-
-
 
 
 if __name__ == "__main__":
