@@ -23,6 +23,87 @@ def init_empty_board():
     
     return board_cnf
 
+def add_patrol_boat_to_board(cnf):
+    """Adds exactly one patrol boat to the board by choosing a random valid placement."""
+    # Collect all valid placements
+    valid_placements = []
+    
+    # Horizontal placements
+    for r in range(BOARD_SIZE):
+        for c in range(BOARD_SIZE - 1):
+            valid_placements.append(('h', r, c))
+    
+    # Vertical placements
+    for r in range(BOARD_SIZE - 1):
+        for c in range(BOARD_SIZE):
+            valid_placements.append(('v', r, c))
+    
+    # Choose one random placement
+    orientation, r, c = random.choice(valid_placements)
+    
+    if orientation == 'h':
+        # Add the patrol boat placement variable
+        pb_var = get_var(3, r, c)
+        cnf.append([pb_var])
+        
+        # Ensure the ship parts are set
+        sp1 = get_var(1, r, c)
+        sp2 = get_var(1, r, c + 1)
+        cnf.append([sp1])
+        cnf.append([sp2])
+    else:
+        # Add the patrol boat placement variable
+        pb_var = get_var(4, r, c)
+        cnf.append([pb_var])
+        
+        # Ensure the ship parts are set
+        sp1 = get_var(1, r, c)
+        sp2 = get_var(1, r + 1, c)
+        cnf.append([sp1])
+        cnf.append([sp2])
+
+def add_submarine_to_board(cnf):
+    """Adds exactly one submarine to the board by choosing a random valid placement."""
+    # Collect all valid placements
+    valid_placements = []
+    
+    # Horizontal placements
+    for r in range(BOARD_SIZE):
+        for c in range(BOARD_SIZE - 2):
+            valid_placements.append(('h', r, c))
+    
+    # Vertical placements
+    for r in range(BOARD_SIZE - 2):
+        for c in range(BOARD_SIZE):
+            valid_placements.append(('v', r, c))
+    
+    # Choose one random placement
+    orientation, r, c = random.choice(valid_placements)
+    
+    if orientation == 'h':
+        # Add the submarine placement variable
+        sm_var = get_var(5, r, c)
+        cnf.append([sm_var])
+        
+        # Ensure the ship parts are set
+        sp1 = get_var(1, r, c)
+        sp2 = get_var(1, r, c + 1)
+        sp3 = get_var(1, r, c + 2)
+        cnf.append([sp1])
+        cnf.append([sp2])
+        cnf.append([sp3])
+    else:
+        # Add the submarine placement variable
+        sm_var = get_var(6, r, c)
+        cnf.append([sm_var])
+        
+        # Ensure the ship parts are set
+        sp1 = get_var(1, r, c)
+        sp2 = get_var(1, r + 1, c)
+        sp3 = get_var(1, r + 2, c)
+        cnf.append([sp1])
+        cnf.append([sp2])
+        cnf.append([sp3])
 
 def add_random_boat(board_cnf, boat_type="PatrolBoat"):
     """Adds a 1x2 PatrolBoat to the CNF by forcing specific SP variables to be True."""
@@ -281,6 +362,8 @@ def add_non_adjacent_constraints(cnf):
 def main():
     print(f"Board Size: {BOARD_SIZE}")
     cnf = init_empty_board()
+    add_patrol_boat_to_board(cnf)
+    add_submarine_to_board(cnf)
     cnf = add_patrol_boat_constraints(cnf)
     cnf = add_submarine_constraints(cnf)
     cnf = add_non_adjacent_constraints(cnf)
