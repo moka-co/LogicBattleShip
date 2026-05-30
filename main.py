@@ -4,7 +4,7 @@ from pysat.formula import CNF
 BOARD_SIZE=10
 
 # Map a unique integer to each cell for each of the three types 
-# (0 = hidden, 1=shippiece, 2=empty)
+# (0 = hidden, 1=shippiece, 2=empty, 3=patrol_boat_horizontal, 4=patrol_boat_vertical)
 def get_var(v_type, r, c):
     return (v_type *100) + (r*10) + c + 1
 
