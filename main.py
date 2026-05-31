@@ -2,96 +2,11 @@ from pysat.formula import CNF
 
 from src.board import *
 from src.ships import *
+from src.ship_logic import *
 from src.utils import *
 
 BOARD_SIZE=10
 
-
-
-def add_shot_hit_miss_constraints(cnf):
-    """Adds the static (non-dynamic) constraints for Shot, Hit, and Miss variables.
-
-    These constraints are added once at KB initialization. The actual Shot/Hit/Miss
-    unit clauses are added dynamically during gameplay via `record_shot`.
-
-    Variable types used:
-      - Type 7 = Shot_{i,j}
-      - Type 8 = Hit_{i,j}
-      - Type 9 = Miss_{i,j}
-
-    Constraints encoded (per the README):
-      1. Shot_{i,j} <=> (Hit_{i,j} OR Miss_{i,j})
-      2. Hit_{i,j} and Miss_{i,j} are mutually exclusive
-      3. Miss_{i,j} -> ¬SP_{i,j}
-      4. Hit_{i,j}  ->  SP_{i,j}
-      5. PatrolBoat orientation inference from hit/miss patterns.
-    """
-
-    for r in range(BOARD_SIZE):
-        for c in range(BOARD_SIZE):
-            shot = get_var(7, r, c)
-            hit = get_var(8, r, c)
-            miss = get_var(9, r, c)
-            sp = get_var(1, r, c)
-
-            # 1. Shot <=> (Hit OR Miss), decomposed into three CNF clauses:
-            #    Shot -> (Hit OR Miss)
-            cnf.append([-shot, hit, miss])
-            #    Hit -> Shot
-            cnf.append([-hit, shot])
-            #    Miss -> Shot
-            cnf.append([-miss, shot])
-
-            # 2. Hit and Miss are mutually exclusive: ¬(Hit AND Miss)
-            cnf.append([-hit, -miss])
-
-            # 3. Miss -> ¬SP (a missed tile cannot contain a ship part)
-            cnf.append([-miss, -sp])
-
-            # 4. Hit -> SP (a hit tile must contain a ship part)
-            cnf.append([-hit, sp])
-
-    # 5. PatrolBoat orientation inference (per README):
-    # If Hit_{i,j} and both horizontal neighbors are Miss, then the ship at (i,j)
-    # cannot be a horizontal patrol boat, and must be a vertical patrol boat with
-    # the other part either above (i-1) or below (i+1).
-    # Formula: (Hit_{i,j} ∧ Miss_{i,j-1} ∧ Miss_{i,j+1}) ->
-    #          (¬PB_{h,i,j} ∧ (PB_{v,i+1,j} ∨ PB_{v,i-1,j}))
-    for r in range(BOARD_SIZE):
-        for c in range(BOARD_SIZE):
-            # Horizontal-misses pattern requires both j-1 and j+1 to be in bounds
-            if c - 1 < 0 or c + 1 >= BOARD_SIZE:
-                continue
-
-            hit = get_var(8, r, c)
-            miss_left = get_var(9, r, c - 1)
-            miss_right = get_var(9, r, c + 1)
-
-            # Conclusion clause 1: ¬PB_{h,i,j}
-            # PB_{h,i,j} is only defined for c <= BOARD_SIZE - 2 (i.e. fits horizontally).
-            # If c == BOARD_SIZE - 1, the horizontal PB at (i,c) doesn't exist anyway,
-            # but emitting the clause is still harmless if the var is unused.
-            if c + 1 < BOARD_SIZE:
-                pb_h = get_var(3, r, c)
-                cnf.append([-hit, -miss_left, -miss_right, -pb_h])
-
-            # Conclusion clause 2: PB_{v,i-1,j} OR PB_{v,i+1,j}
-            # PB_{v,r',c} is defined only for r' <= BOARD_SIZE - 2.
-            disjuncts = [-hit, -miss_left, -miss_right]
-            if r - 1 >= 0:
-                # PB_{v,i-1,j}: places ship at (r-1, c)-(r, c). Valid since r-1 in [0, BOARD_SIZE-2].
-                disjuncts.append(get_var(4, r - 1, c))
-            if r + 1 < BOARD_SIZE and r <= BOARD_SIZE - 2:
-                # PB_{v,i+1,j}: places ship at (r+1, c)-(r+2, c). Need r+1 <= BOARD_SIZE-2.
-                if r + 1 <= BOARD_SIZE - 2:
-                    disjuncts.append(get_var(4, r + 1, c))
-            # Only emit the clause if at least one vertical option is feasible;
-            # otherwise the implication would be contradictory and we'd encode unsat
-            # for an impossible hit pattern (which is fine but we skip for clarity).
-            if len(disjuncts) > 3:
-                cnf.append(disjuncts)
-
-    return cnf
 
 
 def add_sinking_constraints(cnf):
@@ -291,8 +206,8 @@ def main():
     cnf = add_patrol_boat_non_adjacent_constraints(BOARD_SIZE, cnf)
     cnf = add_submarine_non_adjacent_constraints(BOARD_SIZE, cnf)
     # Add Shot/Hit/Miss static constraints (dynamic unit clauses are added later
-    # via `record_shot` during gameplay).
-    cnf = add_shot_hit_miss_constraints(cnf)
+    # via `record_shot` during gameplay). Now lives in src/ship_logic.py.
+    cnf = add_shot_hit_miss_constraints(BOARD_SIZE, cnf)
     # Add Sinking Ships biconditionals and AllPartsSunk consequences.
     cnf = add_sinking_constraints(cnf)
     cnf = add_all_parts_sunk_consequences(cnf)
