@@ -89,10 +89,22 @@ def simulate_game(board_size, shots, game_factory):
     # Visualize board before shots
     visualize_board(board_size, game_factory.cnf)
 
+    # Track shots to avoid duplicates
+    shots_taken = set()
+    
     # Simulate random shots
     for _ in range(shots):
-        r = random.randint(0, board_size - 1)
-        c = random.randint(0, board_size - 1)
+        # Find a coordinate that hasn't been shot yet
+        while True:
+            r = random.randint(0, board_size - 1)
+            c = random.randint(0, board_size - 1)
+            if (r, c) not in shots_taken:
+                shots_taken.add((r, c))
+                break
+            if len(shots_taken) == board_size * board_size:
+                print("All cells have been shot.")
+                return game_factory.cnf
+
         # Determine hit/miss based on actual ship placement
         was_hit = is_ship_part(board_size, game_factory.cnf, r, c)
         record_shot(board_size, game_factory.cnf, r, c, was_hit)
