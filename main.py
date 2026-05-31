@@ -6,7 +6,7 @@ BOARD_SIZE=10
 # Map a unique integer to each cell for each of the three types 
 # (0 = hidden, 1=shippiece, 2=empty, 3=patrol_boat_horizontal, 4=patrol_boat_vertical, 5=submarine_horizontal, 6=submarine_vertical)
 def get_var(v_type, r, c):
-    return (v_type *100) + (r*10) + c + 1
+    return v_type * (BOARD_SIZE * BOARD_SIZE) + r * BOARD_SIZE + c + 1
 
 def init_empty_board():
     board_cnf = CNF()
@@ -367,8 +367,7 @@ def main():
     cnf = add_patrol_boat_constraints(cnf)
     cnf = add_submarine_constraints(cnf)
     cnf = add_non_adjacent_constraints(cnf)
-    return cnf
-
+    
 
 if __name__ == "__main__":
     main()
