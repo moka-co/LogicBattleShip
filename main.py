@@ -8,108 +8,6 @@ BOARD_SIZE=10
 
 
 
-def add_non_adjacent_constraints(cnf):
-    # Cannot place any ships adjacently
-    
-    # PatrolBoat horizontal: PB_{h,i,j} -> (¬SP_{i,j-1} ∧ ¬SP_{i,j+2} ∧ ¬SP_{i+1,j} ∧ ¬SP_{i-1,j} ∧ ¬SP_{i+1,j+1} ∧ ¬SP_{i-1,j+1})
-    for r in range(BOARD_SIZE):
-        for c in range(BOARD_SIZE - 1):  # Horizontal placement needs c < 9
-            pb_h = get_var(3, r, c)
-            
-            adj_positions = []
-            if c > 0:  # Left of first part (i, j-1)
-                adj_positions.append(get_var(1, r, c - 1))
-            if c + 2 < BOARD_SIZE:  # Right of second part (i, j+2)
-                adj_positions.append(get_var(1, r, c + 2))
-            if r + 1 < BOARD_SIZE:  # Below first part (i+1, j)
-                adj_positions.append(get_var(1, r + 1, c))
-                # Below second part (i+1, j+1)
-                adj_positions.append(get_var(1, r + 1, c + 1))
-            if r - 1 >= 0:  # Above first part (i-1, j)
-                adj_positions.append(get_var(1, r - 1, c))
-                # Above second part (i-1, j+1)
-                adj_positions.append(get_var(1, r - 1, c + 1))
-            
-            for adj_sp in adj_positions:
-                cnf.append([-pb_h, -adj_sp])
-    
-    # PatrolBoat vertical: PB_{v,i,j} -> (¬SP_{i-1,j} ∧ ¬SP_{i+2,j} ∧ ¬SP_{i,j+1} ∧ ¬SP_{i,j-1} ∧ ¬SP_{i+1,j+1} ∧ ¬SP_{i+1,j-1})
-    for r in range(BOARD_SIZE - 1):  # Vertical placement needs r < 9
-        for c in range(BOARD_SIZE):
-            pb_v = get_var(4, r, c)
-            
-            adj_positions = []
-            if r - 1 >= 0:  # Above (i-1, j)
-                adj_positions.append(get_var(1, r - 1, c))
-            if r + 2 < BOARD_SIZE:  # Below second part (i+2, j)
-                adj_positions.append(get_var(1, r + 2, c))
-            if c + 1 < BOARD_SIZE:  # Right of first part (i, j+1)
-                adj_positions.append(get_var(1, r, c + 1))
-                # Right of second part (i+1, j+1)
-                adj_positions.append(get_var(1, r + 1, c + 1))
-            if c - 1 >= 0:  # Left of first part (i, j-1)
-                adj_positions.append(get_var(1, r, c - 1))
-                # Left of second part (i+1, j-1)
-                adj_positions.append(get_var(1, r + 1, c - 1))
-            
-            for adj_sp in adj_positions:
-                cnf.append([-pb_v, -adj_sp])
-    
-    # Submarine horizontal: SM_{h,i,j} -> (¬SP_{i,j-1} ∧ ¬SP_{i,j+3} ∧ ¬SP_{i+1,j} ∧ ¬SP_{i-1,j} ∧ ¬SP_{i+1,j-1} ∧ ¬SP_{i-1,j-1} ∧ ¬SP_{i+1,j+1} ∧ ¬SP_{i-1,j+1} ∧ ¬SP_{i+1,j+2} ∧ ¬SP_{i-1,j+2})
-    for r in range(BOARD_SIZE):
-        for c in range(BOARD_SIZE - 2):  # Horizontal placement needs c < 8
-            sm_h = get_var(5, r, c)
-            
-            adj_positions = []
-            if c - 1 >= 0:  # Left (i, j-1)
-                adj_positions.append(get_var(1, r, c - 1))
-            if c + 3 < BOARD_SIZE:  # Right (i, j+3)
-                adj_positions.append(get_var(1, r, c + 3))
-            if r + 1 < BOARD_SIZE:  # Below row
-                adj_positions.append(get_var(1, r + 1, c))      # (i+1, j)
-                adj_positions.append(get_var(1, r + 1, c + 1))  # (i+1, j+1)
-                adj_positions.append(get_var(1, r + 1, c + 2))  # (i+1, j+2)
-                if c - 1 >= 0:
-                    adj_positions.append(get_var(1, r + 1, c - 1))  # (i+1, j-1)
-            if r - 1 >= 0:  # Above row
-                adj_positions.append(get_var(1, r - 1, c))      # (i-1, j)
-                adj_positions.append(get_var(1, r - 1, c + 1))  # (i-1, j+1)
-                adj_positions.append(get_var(1, r - 1, c + 2))  # (i-1, j+2)
-                if c - 1 >= 0:
-                    adj_positions.append(get_var(1, r - 1, c - 1))  # (i-1, j-1)
-            
-            for adj_sp in adj_positions:
-                cnf.append([-sm_h, -adj_sp])
-    
-    # Submarine vertical: SM_{v,i,j} -> (¬SP_{i-1,j} ∧ ¬SP_{i+3,j} ∧ ¬SP_{i,j+1} ∧ ¬SP_{i,j-1} ∧ ¬SP_{i-1,j+1} ∧ ¬SP_{i-1,j-1} ∧ ¬SP_{i+1,j+1} ∧ ¬SP_{i+1,j-1} ∧ ¬SP_{i+2,j+1} ∧ ¬SP_{i+2,j-1})
-    for r in range(BOARD_SIZE - 2):  # Vertical placement needs r < 8
-        for c in range(BOARD_SIZE):
-            sm_v = get_var(6, r, c)
-            
-            adj_positions = []
-            if r - 1 >= 0:  # Above (i-1, j)
-                adj_positions.append(get_var(1, r - 1, c))
-            if r + 3 < BOARD_SIZE:  # Below (i+3, j)
-                adj_positions.append(get_var(1, r + 3, c))
-            if c + 1 < BOARD_SIZE:  # Right column
-                adj_positions.append(get_var(1, r, c + 1))      # (i, j+1)
-                adj_positions.append(get_var(1, r + 1, c + 1))  # (i+1, j+1)
-                adj_positions.append(get_var(1, r + 2, c + 1))  # (i+2, j+1)
-                if r - 1 >= 0:
-                    adj_positions.append(get_var(1, r - 1, c + 1))  # (i-1, j+1)
-            if c - 1 >= 0:  # Left column
-                adj_positions.append(get_var(1, r, c - 1))      # (i, j-1)
-                adj_positions.append(get_var(1, r + 1, c - 1))  # (i+1, j-1)
-                adj_positions.append(get_var(1, r + 2, c - 1))  # (i+2, j-1)
-                if r - 1 >= 0:
-                    adj_positions.append(get_var(1, r - 1, c - 1))  # (i-1, j-1)
-            
-            for adj_sp in adj_positions:
-                cnf.append([-sm_v, -adj_sp])
-    
-    return cnf
-
-
 def add_shot_hit_miss_constraints(cnf):
     """Adds the static (non-dynamic) constraints for Shot, Hit, and Miss variables.
 
@@ -387,7 +285,11 @@ def main():
     # Add ship placement and adjacency constraints
     cnf = add_patrol_boat_constraints(cnf)
     cnf = add_submarine_constraints(cnf)
-    cnf = add_non_adjacent_constraints(cnf)
+    # Per-ship non-adjacency constraints (replaces the old combined
+    # add_non_adjacent_constraints; split per ship type to scale as more
+    # ship types are added).
+    cnf = add_patrol_boat_non_adjacent_constraints(BOARD_SIZE, cnf)
+    cnf = add_submarine_non_adjacent_constraints(BOARD_SIZE, cnf)
     # Add Shot/Hit/Miss static constraints (dynamic unit clauses are added later
     # via `record_shot` during gameplay).
     cnf = add_shot_hit_miss_constraints(cnf)

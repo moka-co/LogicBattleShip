@@ -86,6 +86,67 @@ def add_patrol_boat_constraints(board_size, cnf):
     return cnf 
 
 
+def add_patrol_boat_non_adjacent_constraints(board_size, cnf):
+    """Encodes the non-adjacency constraints for the patrol boat (length 2).
+
+    For each valid patrol-boat placement (horizontal or vertical) at (r, c),
+    no ship part (SP) may appear in any of the 6 buffer cells surrounding the
+    2-cell ship (orthogonally or diagonally adjacent, excluding the ship's own
+    cells).
+
+    Variable types used:
+      - Type 1 = SP_{i,j}   (ship part)
+      - Type 3 = PB_{h,i,j} (patrol boat horizontal placement)
+      - Type 4 = PB_{v,i,j} (patrol boat vertical placement)
+    """
+
+    # PatrolBoat horizontal: PB_{h,i,j} -> (¬SP_{i,j-1} ∧ ¬SP_{i,j+2} ∧ ¬SP_{i+1,j} ∧ ¬SP_{i-1,j} ∧ ¬SP_{i+1,j+1} ∧ ¬SP_{i-1,j+1})
+    for r in range(board_size):
+        for c in range(board_size - 1):  # Horizontal placement needs c < board_size - 1
+            pb_h = get_var(board_size, 3, r, c)
+
+            adj_positions = []
+            if c > 0:  # Left of first part (i, j-1)
+                adj_positions.append(get_var(board_size, 1, r, c - 1))
+            if c + 2 < board_size:  # Right of second part (i, j+2)
+                adj_positions.append(get_var(board_size, 1, r, c + 2))
+            if r + 1 < board_size:  # Below first part (i+1, j)
+                adj_positions.append(get_var(board_size, 1, r + 1, c))
+                # Below second part (i+1, j+1)
+                adj_positions.append(get_var(board_size, 1, r + 1, c + 1))
+            if r - 1 >= 0:  # Above first part (i-1, j)
+                adj_positions.append(get_var(board_size, 1, r - 1, c))
+                # Above second part (i-1, j+1)
+                adj_positions.append(get_var(board_size, 1, r - 1, c + 1))
+
+            for adj_sp in adj_positions:
+                cnf.append([-pb_h, -adj_sp])
+
+    # PatrolBoat vertical: PB_{v,i,j} -> (¬SP_{i-1,j} ∧ ¬SP_{i+2,j} ∧ ¬SP_{i,j+1} ∧ ¬SP_{i,j-1} ∧ ¬SP_{i+1,j+1} ∧ ¬SP_{i+1,j-1})
+    for r in range(board_size - 1):  # Vertical placement needs r < board_size - 1
+        for c in range(board_size):
+            pb_v = get_var(board_size, 4, r, c)
+
+            adj_positions = []
+            if r - 1 >= 0:  # Above (i-1, j)
+                adj_positions.append(get_var(board_size, 1, r - 1, c))
+            if r + 2 < board_size:  # Below second part (i+2, j)
+                adj_positions.append(get_var(board_size, 1, r + 2, c))
+            if c + 1 < board_size:  # Right of first part (i, j+1)
+                adj_positions.append(get_var(board_size, 1, r, c + 1))
+                # Right of second part (i+1, j+1)
+                adj_positions.append(get_var(board_size, 1, r + 1, c + 1))
+            if c - 1 >= 0:  # Left of first part (i, j-1)
+                adj_positions.append(get_var(board_size, 1, r, c - 1))
+                # Left of second part (i+1, j-1)
+                adj_positions.append(get_var(board_size, 1, r + 1, c - 1))
+
+            for adj_sp in adj_positions:
+                cnf.append([-pb_v, -adj_sp])
+
+    return cnf
+
+
 
 # Submarine
 def add_submarine_to_board(board_size, cnf, occupied=None):
@@ -172,3 +233,70 @@ def add_submarine_constraints(board_size, cnf):
     return cnf
 
 
+def add_submarine_non_adjacent_constraints(board_size, cnf):
+    """Encodes the non-adjacency constraints for the submarine (length 3).
+
+    For each valid submarine placement (horizontal or vertical) at (r, c),
+    no ship part (SP) may appear in any of the 8 buffer cells surrounding the
+    3-cell ship (orthogonally or diagonally adjacent, excluding the ship's own
+    cells).
+
+    Variable types used:
+      - Type 1 = SP_{i,j}   (ship part)
+      - Type 5 = SM_{h,i,j} (submarine horizontal placement)
+      - Type 6 = SM_{v,i,j} (submarine vertical placement)
+    """
+
+    # Submarine horizontal: SM_{h,i,j} -> (¬SP_{i,j-1} ∧ ¬SP_{i,j+3} ∧ ¬SP_{i+1,j} ∧ ¬SP_{i-1,j} ∧ ¬SP_{i+1,j-1} ∧ ¬SP_{i-1,j-1} ∧ ¬SP_{i+1,j+1} ∧ ¬SP_{i-1,j+1} ∧ ¬SP_{i+1,j+2} ∧ ¬SP_{i-1,j+2})
+    for r in range(board_size):
+        for c in range(board_size - 2):  # Horizontal placement needs c < board_size - 2
+            sm_h = get_var(board_size, 5, r, c)
+
+            adj_positions = []
+            if c - 1 >= 0:  # Left (i, j-1)
+                adj_positions.append(get_var(board_size, 1, r, c - 1))
+            if c + 3 < board_size:  # Right (i, j+3)
+                adj_positions.append(get_var(board_size, 1, r, c + 3))
+            if r + 1 < board_size:  # Below row
+                adj_positions.append(get_var(board_size, 1, r + 1, c))      # (i+1, j)
+                adj_positions.append(get_var(board_size, 1, r + 1, c + 1))  # (i+1, j+1)
+                adj_positions.append(get_var(board_size, 1, r + 1, c + 2))  # (i+1, j+2)
+                if c - 1 >= 0:
+                    adj_positions.append(get_var(board_size, 1, r + 1, c - 1))  # (i+1, j-1)
+            if r - 1 >= 0:  # Above row
+                adj_positions.append(get_var(board_size, 1, r - 1, c))      # (i-1, j)
+                adj_positions.append(get_var(board_size, 1, r - 1, c + 1))  # (i-1, j+1)
+                adj_positions.append(get_var(board_size, 1, r - 1, c + 2))  # (i-1, j+2)
+                if c - 1 >= 0:
+                    adj_positions.append(get_var(board_size, 1, r - 1, c - 1))  # (i-1, j-1)
+
+            for adj_sp in adj_positions:
+                cnf.append([-sm_h, -adj_sp])
+
+    # Submarine vertical: SM_{v,i,j} -> (¬SP_{i-1,j} ∧ ¬SP_{i+3,j} ∧ ¬SP_{i,j+1} ∧ ¬SP_{i,j-1} ∧ ¬SP_{i-1,j+1} ∧ ¬SP_{i-1,j-1} ∧ ¬SP_{i+1,j+1} ∧ ¬SP_{i+1,j-1} ∧ ¬SP_{i+2,j+1} ∧ ¬SP_{i+2,j-1})
+    for r in range(board_size - 2):  # Vertical placement needs r < board_size - 2
+        for c in range(board_size):
+            sm_v = get_var(board_size, 6, r, c)
+
+            adj_positions = []
+            if r - 1 >= 0:  # Above (i-1, j)
+                adj_positions.append(get_var(board_size, 1, r - 1, c))
+            if r + 3 < board_size:  # Below (i+3, j)
+                adj_positions.append(get_var(board_size, 1, r + 3, c))
+            if c + 1 < board_size:  # Right column
+                adj_positions.append(get_var(board_size, 1, r, c + 1))      # (i, j+1)
+                adj_positions.append(get_var(board_size, 1, r + 1, c + 1))  # (i+1, j+1)
+                adj_positions.append(get_var(board_size, 1, r + 2, c + 1))  # (i+2, j+1)
+                if r - 1 >= 0:
+                    adj_positions.append(get_var(board_size, 1, r - 1, c + 1))  # (i-1, j+1)
+            if c - 1 >= 0:  # Left column
+                adj_positions.append(get_var(board_size, 1, r, c - 1))      # (i, j-1)
+                adj_positions.append(get_var(board_size, 1, r + 1, c - 1))  # (i+1, j-1)
+                adj_positions.append(get_var(board_size, 1, r + 2, c - 1))  # (i+2, j-1)
+                if r - 1 >= 0:
+                    adj_positions.append(get_var(board_size, 1, r - 1, c - 1))  # (i-1, j-1)
+
+            for adj_sp in adj_positions:
+                cnf.append([-sm_v, -adj_sp])
+
+    return cnf
