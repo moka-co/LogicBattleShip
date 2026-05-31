@@ -13,11 +13,9 @@ def visualize_board(board_size, cnf):
     for r in range(board_size):
         row_str = ""
         for c in range(board_size):
-            # Check for Hit (8), Miss (9), or Ship Part (1)
+            # Check for Hit (8) or Ship Part (1)
             if get_var(board_size, 8, r, c) in unit_clauses:
-                row_str += "[H]" # Hit
-            elif get_var(board_size, 9, r, c) in unit_clauses:
-                row_str += "[M]"
+                row_str += "[H]"
             elif get_var(board_size, 1, r, c) in unit_clauses:
                 row_str += "[S]"
             else:
