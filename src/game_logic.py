@@ -1,4 +1,5 @@
 import random
+from pysat.solvers import Glucose3
 from src.board import init_empty_board
 from src.ship_types import *
 from src.ship_logic import *
@@ -83,6 +84,15 @@ def is_ship_part(board_size, cnf, r, c):
     """Checks if a cell contains a ship part by inspecting the unit clauses."""
     unit_clauses = {clause[0] for clause in cnf.clauses if len(clause) == 1}
     return get_var(board_size, 1, r, c) in unit_clauses
+
+
+def solve_game(cnf):
+    """Uses Glucose3 to check if the current CNF is satisfiable."""
+    with Glucose3(bootstrap_with=cnf.clauses) as solver:
+        if solver.solve():
+            return solver.get_model()
+        else:
+            return None
 
 
 def simulate_game(board_size, shots, game_factory, use_gui=False):
