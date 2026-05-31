@@ -132,7 +132,7 @@ If the agent shot and horizontal neighbours are misses, then the ship must be ve
 **AllPartsSunk Consequences**
 Once you've hit all parts of a ship, you know the surrounding area is empty:
 - PatrolBoat horizontal at (i,j):
-$SunkPB_{h,i,j}  ⟹  ¬SP_{i,j−1}∧¬SP_{i,j+2}∧¬SP_{i−1,j}∧¬SP_{i−1,j+1}∧¬SP_{i+1,j}∧¬SP_{i+1,j+1}$
+$SunkPB_{h,i,j}  ⟹  ¬SP_{i,j−1}∧¬SP_{i,j+2}∧¬SP_{i−1,j}∧¬SP_{i−1,j+1}∧¬SP_{i+1,j}∧¬SP_{i+1,j+1}$
 - PatrolBoat vertical at (i,j):
 $Sunk_{PB_{v,i,j}} \implies \neg SP_{i-1,j} \land \neg SP_{i+2,j} \land \neg SP_{i,j-1} \land \neg SP_{i+1,j-1} \land \neg SP_{i,j+1} \land \neg SP_{i+1,j+1}$
 - Submarine horizontal at (i,j): $Sunk_{SM_{h,i,j}} \implies \neg SP_{i,j-1} \land \neg SP_{i,j+3} \land \neg SP_{i-1,j} \land \neg SP_{i-1,j+1} \land \neg SP_{i-1,j+2} \land \neg SP_{i+1,j} \land \neg SP_{i+1,j+1} \land \neg SP_{i+1,j+2}$
@@ -148,8 +148,8 @@ $Sunk_{SM_{v,i,j}} \implies \neg SP_{i-1,j} \land \neg SP_{i+3,j} \land \neg SP_
 - At each turn the KB is updated and the new information is added to the Knowledge Base
 
 **KB update after each shot**:
-- On a miss: $\text{Assert: } Miss_{i,j}$ which immediately entails: $¬SP_{i,j}$
-- On a hit: $\text{Assert: } Hit_{i,j}$ which immediately entails: $SP_{i,j}$
+- On a miss: $\text{Assert: } Miss_{i,j}$ which immediately entails: $¬SP_{i,j}$
+- On a hit: $\text{Assert: } Hit_{i,j}$ which immediately entails: $SP_{i,j}$
 - Additionally, after every shot: $\text{Assert: } Shot_{i,j}$
 
 The KB grows monotonically, facts are only added never retracted since observations in Battleship are permanent.
@@ -184,3 +184,51 @@ At each turn, for every unshot tile $(i,j)$, the agents submits: $SOLVE(KB \cup 
 
 ## Conversion to CNF
 - A a tile either contains a ShipPart or is empty: $(SP_{i,j} \land \neg E_{i,j}) \lor (\neg SP_{i,j} \land E_{i,j})$ applying distributed property (distribute the outer OR over inner conunctions) becomes $(SP_{i,j} \lor E_{i,j}) \land (\neg SP_{i,j} \lor \neg E_{i,j}))$
+
+---
+
+## Hunting Strategy with SAT
+
+The agent uses a two-mode strategy implemented in `src/game_logic.py`:
+
+1. **Random mode (default)**: when there are no "open hits" on the board, the agent picks a uniformly random unshot tile.
+2. **Hunting mode**: as soon as the agent has at least one *open hit* — a tile where $Hit_{i,j}$ is asserted but no Sunk variable covering that tile is yet asserted — the agent uses the SAT solver to choose the next shot from cells adjacent to the open hit(s).
+
+### Definitions
+
+- **Open hit**: a cell $(r,c)$ such that the unit clause $Hit_{r,c}$ is in the KB, but no Sunk variable (types 10–13) covering $(r,c)$ is asserted. In other words, the agent knows it hit a ship part there, but the corresponding ship has not yet been fully destroyed.
+- **Hunt candidate**: an unshot, in-bounds neighbor (N, S, E, W only — never diagonals, since ships are linear) of an open hit.
+
+### Algorithm: `get_hunt_targets`
+
+The function `get_hunt_targets(board_size, cnf, shots_taken)` returns the next set of cells to shoot:
+
+1. Collect all **open hits** by scanning the unit clauses of the CNF for asserted $Hit_{r,c}$ variables, excluding those covered by an asserted Sunk variable.
+2. If no open hits exist, return an empty list (caller falls back to random).
+3. For each open hit $(hr, hc)$, enumerate the 4 orthogonal neighbors $(hr \pm 1, hc)$ and $(hr, hc \pm 1)$.
+4. For each unshot, in-bounds neighbor $(nr, nc)$, query Glucose3 twice using `solver.solve(assumptions=[...])`:
+   - **Priority 1 — Forced ship part**: ask whether $KB \cup \{\neg SP_{nr,nc}\}$ is UNSAT. If it is, then $KB \models SP_{nr,nc}$ and the cell is logically guaranteed to contain a ship part. Return this cell immediately.
+   - **Priority 2 — Possible ship part**: ask whether $KB \cup \{SP_{nr,nc}\}$ is SAT. If it is, the cell is *consistent* with containing a ship part and is added to the candidate list.
+   - **Otherwise** (i.e. $KB \cup \{SP_{nr,nc}\}$ is UNSAT), the cell is logically guaranteed to be empty; skip it.
+5. Return the list of possible candidates.
+
+### Key implementation detail: assumptions, not assertions
+
+Glucose3's `solve(assumptions=[...])` method temporarily assumes the given literals are true **only for that single solve call**. This means the CNF itself is never mutated by the hunting logic — we can probe many hypotheses without polluting the KB. This is essential: we only want to *test* whether $SP_{nr,nc}$ is consistent, not commit to it.
+
+### Switching modes
+
+The agent switches modes automatically based on the state of the KB:
+
+- After every shot, `record_shot` appends the appropriate unit clauses.
+- After hits, the `add_sinking_constraints` biconditionals automatically cause a Sunk variable to be propagated to true (the SAT solver implicitly handles this).
+- When all parts of a ship are sunk, `add_all_parts_sunk_consequences` clauses propagate $\neg SP$ to surrounding cells, which removes those open hits from the open-hit set.
+- Therefore, the agent transitions from hunting back to random simply by checking on each turn whether `_get_open_hits` returns an empty list.
+
+### Why this works
+
+This strategy implements the agent strategy from the previous section precisely:
+
+- The "forced" check (Priority 1) is the entailment query $KB \models SP_{i,j}$ — exactly the rule "if $KB \land \neg SP_{i,j}$ is UNSAT, shoot $(i,j)$."
+- The "possible" check (Priority 2) is a relaxed version that picks logically consistent candidates when no cell is strictly forced. This handles the realistic case where the agent has one hit but does not yet know the ship's orientation.
+- Restricting candidates to the orthogonal neighbors of open hits avoids wasteful solver queries on tiles that are physically impossible ship continuations.
