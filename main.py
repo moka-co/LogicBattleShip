@@ -1,7 +1,7 @@
 from pysat.formula import CNF
 
 from src.board import *
-from src.ships import *
+from src.ship_types import *
 from src.ship_logic import *
 from src.utils import *
 
