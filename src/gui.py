@@ -22,22 +22,28 @@ def run_gui(board_size, cnf, shot_history):
     running = True
     shot_index = 0
     last_update_time = time.time()
+    game_over = False
     
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
         
+        # Build current state from applied shots
+        hits = {(r, c) for r, c, hit in applied_shots if hit}
+        
+        # Check if all ships are sunk
+        if all_ships and all_ships.issubset(hits):
+            game_over = True
+        
         # Apply next shot if available (every 0.5 seconds)
-        if shot_index < len(shot_history) and time.time() - last_update_time > 0.5:
+        if not game_over and shot_index < len(shot_history) and time.time() - last_update_time > 0.5:
             applied_shots.append(shot_history[shot_index])
             shot_index += 1
             last_update_time = time.time()
         
         screen.fill((255, 255, 255))
         
-        # Build current state from applied shots
-        hits = {(r, c) for r, c, hit in applied_shots if hit}
         misses = {(r, c) for r, c, hit in applied_shots if not hit}
         
         for r in range(board_size):
@@ -50,8 +56,8 @@ def run_gui(board_size, cnf, shot_history):
                     color = (255, 0, 0) # Hit
                 elif (r, c) in misses:
                     color = (0, 0, 255) # Miss
-                elif (r, c) in all_ships and shot_index >= len(shot_history):
-                    color = (0, 255, 0) # Ship (revealed at end)
+                elif (r, c) in all_ships and (game_over or shot_index >= len(shot_history)):
+                    color = (0, 255, 0) # Ship (revealed at end or if sunk)
                 
                 pygame.draw.rect(screen, color, rect)
                 pygame.draw.rect(screen, (0, 0, 0), rect, 1)
