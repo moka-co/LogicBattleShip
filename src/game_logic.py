@@ -92,6 +92,7 @@ def simulate_game(board_size, shots, game_factory, use_gui=False):
 
     # Track shots to avoid duplicates
     shots_taken = set()
+    shot_history = []
     
     # Simulate random shots
     for _ in range(shots):
@@ -109,12 +110,13 @@ def simulate_game(board_size, shots, game_factory, use_gui=False):
         # Determine hit/miss based on actual ship placement
         was_hit = is_ship_part(board_size, game_factory.cnf, r, c)
         record_shot(board_size, game_factory.cnf, r, c, was_hit)
+        shot_history.append((r, c, was_hit))
         print(f"Shot at ({r}, {c}) - Hit: {was_hit}")
 
     # Visualize board after shots
     visualize_board(board_size, game_factory.cnf)
     
     if use_gui:
-        run_gui(board_size, game_factory.cnf)
+        run_gui(board_size, game_factory.cnf, shot_history)
         
     return game_factory.cnf
