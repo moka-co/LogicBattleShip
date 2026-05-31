@@ -35,17 +35,11 @@ def record_shot(cnf, r, c, was_hit):
 def main():
     print(f"Board Size: {BOARD_SIZE}")
     cnf = init_empty_board()
-    # Place ships physically on the board (chooses random valid positions)
-    occupied = add_patrol_boat_to_board(cnf)
-    occupied = add_submarine_to_board(cnf, occupied)
-    # Add ship placement and adjacency constraints
-    cnf = add_patrol_boat_constraints(cnf)
-    cnf = add_submarine_constraints(cnf)
-    # Per-ship non-adjacency constraints (replaces the old combined
-    # add_non_adjacent_constraints; split per ship type to scale as more
-    # ship types are added).
-    cnf = add_patrol_boat_non_adjacent_constraints(BOARD_SIZE, cnf)
-    cnf = add_submarine_non_adjacent_constraints(BOARD_SIZE, cnf)
+    # Place ships physically on the board and add their constraints
+    pb_factory = PatrolBoatFactory(BOARD_SIZE)
+    sm_factory = SubmarineFactory(BOARD_SIZE)
+    occupied = pb_factory.build(cnf)
+    occupied = sm_factory.build(cnf, occupied)
     # Add Shot/Hit/Miss static constraints (dynamic unit clauses are added later
     # via `record_shot` during gameplay). Now lives in src/ship_logic.py.
     cnf = add_shot_hit_miss_constraints(BOARD_SIZE, cnf)
