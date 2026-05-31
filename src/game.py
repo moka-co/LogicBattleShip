@@ -5,6 +5,13 @@ from src.utils import *
 
 
 class GameFactory:
+    """
+    A factory class responsible for initializing the Battleship game state.
+
+    This class sets up the initial CNF formula by placing ships on the board,
+    applying static game rules (shot/hit/miss constraints), and configuring
+    the logic for sinking ships and their consequences.
+    """
     def __init__(self, board_size):
         self.board_size = board_size
         self.occupied = set()
