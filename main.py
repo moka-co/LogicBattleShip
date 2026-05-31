@@ -22,6 +22,11 @@ def visualize_board(board_size, cnf):
                 row_str += "[ ]"
         print(row_str)
 
+def is_ship_part(board_size, cnf, r, c):
+    """Checks if a cell contains a ship part by inspecting the unit clauses."""
+    unit_clauses = {clause[0] for clause in cnf.clauses if len(clause) == 1}
+    return get_var(board_size, 1, r, c) in unit_clauses
+
 def main():
     parser = argparse.ArgumentParser(description="Battleship SAT Solver")
     parser.add_argument(
@@ -48,8 +53,8 @@ def main():
     for _ in range(args.shots):
         r = random.randint(0, args.size - 1)
         c = random.randint(0, args.size - 1)
-        # Simulate a hit/miss randomly for demonstration
-        was_hit = random.choice([True, False])
+        # Determine hit/miss based on actual ship placement
+        was_hit = is_ship_part(args.size, game_factory.cnf, r, c)
         record_shot(args.size, game_factory.cnf, r, c, was_hit)
         print(f"Shot at ({r}, {c}) - Hit: {was_hit}")
 
