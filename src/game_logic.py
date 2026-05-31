@@ -3,6 +3,7 @@ from src.board import init_empty_board
 from src.ship_types import *
 from src.ship_logic import *
 from src.utils import *
+from src.gui import run_gui
 
 
 class GameFactory:
@@ -84,7 +85,7 @@ def is_ship_part(board_size, cnf, r, c):
     return get_var(board_size, 1, r, c) in unit_clauses
 
 
-def simulate_game(board_size, shots, game_factory):
+def simulate_game(board_size, shots, game_factory, use_gui=False):
     """Run a simulation: visualize board before and after random shots."""
     # Visualize board before shots
     visualize_board(board_size, game_factory.cnf)
@@ -103,7 +104,7 @@ def simulate_game(board_size, shots, game_factory):
                 break
             if len(shots_taken) == board_size * board_size:
                 print("All cells have been shot.")
-                return game_factory.cnf
+                break
 
         # Determine hit/miss based on actual ship placement
         was_hit = is_ship_part(board_size, game_factory.cnf, r, c)
@@ -112,4 +113,8 @@ def simulate_game(board_size, shots, game_factory):
 
     # Visualize board after shots
     visualize_board(board_size, game_factory.cnf)
+    
+    if use_gui:
+        run_gui(board_size, game_factory.cnf)
+        
     return game_factory.cnf
