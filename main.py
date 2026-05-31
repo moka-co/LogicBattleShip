@@ -1,7 +1,7 @@
 from pysat.formula import CNF
 from src.game import GameFactory
 
-BOARD_SIZE=10
+BOARD_SIZE = 10
 
 def main():
     print(f"Board Size: {BOARD_SIZE}")

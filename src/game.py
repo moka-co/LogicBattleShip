@@ -25,9 +25,7 @@ class GameFactory:
         self.cnf = add_all_parts_sunk_consequences(self.board_size, self.cnf)
 
 
-
-
-def record_shot(cnf, r, c, was_hit):
+def record_shot(board_size, cnf, r, c, was_hit):
     """Records a shot outcome by appending unit clauses to the CNF.
 
     This function is called dynamically during gameplay after each shot.
@@ -35,16 +33,17 @@ def record_shot(cnf, r, c, was_hit):
     propagate the consequences (e.g., Hit -> SP, Miss -> ¬SP) via the SAT solver.
 
     Args:
+        board_size: the size of the board.
         cnf: the CNF knowledge base to update (mutated in place).
         r, c: the row and column of the shot tile.
         was_hit: True if the shot hit a ship part, False if it missed.
     """
     # Assert Shot_{r,c} (the tile has been shot)
-    cnf.append([get_var(BOARD_SIZE, 7, r, c)])
+    cnf.append([get_var(board_size, 7, r, c)])
 
     if was_hit:
         # Assert Hit_{r,c}
-        cnf.append([get_var(BOARD_SIZE, 8, r, c)])
+        cnf.append([get_var(board_size, 8, r, c)])
     else:
         # Assert Miss_{r,c}
-        cnf.append([get_var(BOARD_SIZE, 9, r, c)])
+        cnf.append([get_var(board_size, 9, r, c)])
