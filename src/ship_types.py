@@ -300,3 +300,30 @@ def add_submarine_non_adjacent_constraints(board_size, cnf):
                 cnf.append([-sm_v, -adj_sp])
 
     return cnf
+
+
+class PatrolBoatFactory:
+    def __init__(self, board_size):
+        self.board_size = board_size
+
+    def build(self, cnf, occupied=None):
+        if occupied is None:
+            occupied = set()
+        occupied = add_patrol_boat_to_board(self.board_size, cnf, occupied)
+        add_patrol_boat_constraints(self.board_size, cnf)
+        add_patrol_boat_non_adjacent_constraints(self.board_size, cnf)
+        return occupied
+
+
+class SubmarineFactory:
+    def __init__(self, board_size):
+        self.board_size = board_size
+
+    def build(self, cnf, occupied=None):
+        if occupied is None:
+            occupied = set()
+        occupied = add_submarine_to_board(self.board_size, cnf, occupied)
+        add_submarine_constraints(self.board_size, cnf)
+        add_submarine_non_adjacent_constraints(self.board_size, cnf)
+        return occupied
+
