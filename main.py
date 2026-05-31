@@ -13,9 +13,15 @@ def visualize_board(board_size, cnf):
     for r in range(board_size):
         row_str = ""
         for c in range(board_size):
-            # Assuming variable type 1 represents Ship Part (SP)
-            var = get_var(board_size, 1, r, c)
-            row_str += "[S]" if var in unit_clauses else "[ ]"
+            # Check for Hit (8), Miss (9), or Ship Part (1)
+            if get_var(board_size, 8, r, c) in unit_clauses:
+                row_str += "[H]"
+            elif get_var(board_size, 9, r, c) in unit_clauses:
+                row_str += "[M]"
+            elif get_var(board_size, 1, r, c) in unit_clauses:
+                row_str += "[S]"
+            else:
+                row_str += "[ ]"
         print(row_str)
 
 def main():
