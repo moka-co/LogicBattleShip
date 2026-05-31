@@ -15,7 +15,7 @@ def visualize_board(board_size, cnf):
         for c in range(board_size):
             # Check for Hit (8), Miss (9), or Ship Part (1)
             if get_var(board_size, 8, r, c) in unit_clauses:
-                row_str += "[H]"
+                row_str += "[H]" # Hit
             elif get_var(board_size, 9, r, c) in unit_clauses:
                 row_str += "[M]"
             elif get_var(board_size, 1, r, c) in unit_clauses:
@@ -43,6 +43,9 @@ def main():
     print(f"Board Size: {args.size}")
     game_factory = GameFactory(args.size)
     
+    # Visualize board before shoots 
+
+    visualize_board(args.size, game_factory.cnf)
     # Simulate random shots
     for _ in range(args.shots):
         r = random.randint(0, args.size - 1)
