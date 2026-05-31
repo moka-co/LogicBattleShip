@@ -1,5 +1,5 @@
 from pysat.formula import CNF
-from utils import get_var
+from src.utils import get_var
 
 
 def init_empty_board(board_size = 10):

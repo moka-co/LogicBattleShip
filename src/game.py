@@ -1,4 +1,4 @@
-from src.board import *
+from src.board import init_empty_board
 from src.ship_types import *
 from src.ship_logic import *
 from src.utils import *

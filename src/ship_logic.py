@@ -1,4 +1,4 @@
-from utils import get_var
+from src.utils import get_var
 
 
 def add_shot_hit_miss_constraints(board_size, cnf):

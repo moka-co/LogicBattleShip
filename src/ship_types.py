@@ -1,5 +1,5 @@
 import random
-from utils import _get_ship_cells, get_var, _get_forbidden_cells
+from src.utils import _get_ship_cells, get_var, _get_forbidden_cells
 
 # Patrol Boat
 def add_patrol_boat_to_board(board_size, cnf, occupied=None):
