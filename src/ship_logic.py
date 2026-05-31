@@ -85,3 +85,162 @@ def add_shot_hit_miss_constraints(board_size, cnf):
                 cnf.append(disjuncts)
 
     return cnf
+
+
+def add_sinking_constraints(board_size, cnf):
+    """Adds the Sinking Ships biconditional constraints.
+
+    A ship is "sunk" iff all of its parts have been Hit. We encode the biconditional
+    Sunk_X_{o,i,j} <=> (Hit_{cell_1} AND Hit_{cell_2} AND ... AND Hit_{cell_n})
+    for each ship type X (PatrolBoat, Submarine), orientation o (h, v), and starting
+    position (i,j) where the ship fits on the board.
+
+    The biconditional A <=> (B1 AND B2 AND ... AND Bn) decomposes into CNF as:
+      - A -> Bk            (for each k): [-A, Bk]
+      - (B1 ∧ ... ∧ Bn) -> A : [-B1, -B2, ..., -Bn, A]
+
+    Variable types used:
+      - Type 10 = Sunk_PB_{h,i,j}
+      - Type 11 = Sunk_PB_{v,i,j}
+      - Type 12 = Sunk_SM_{h,i,j}
+      - Type 13 = Sunk_SM_{v,i,j}
+    """
+
+    # --- Sunk PatrolBoat horizontal: Sunk_PB_{h,i,j} <=> (Hit_{i,j} ∧ Hit_{i,j+1}) ---
+    for r in range(board_size):
+        for c in range(board_size - 1):  # needs c+1 in bounds
+            sunk = get_var(board_size, 10, r, c)
+            h1 = get_var(board_size, 8, r, c)
+            h2 = get_var(board_size, 8, r, c + 1)
+            # Sunk -> Hit_k
+            cnf.append([-sunk, h1])
+            cnf.append([-sunk, h2])
+            # (Hit_1 ∧ Hit_2) -> Sunk
+            cnf.append([-h1, -h2, sunk])
+
+    # --- Sunk PatrolBoat vertical: Sunk_PB_{v,i,j} <=> (Hit_{i,j} ∧ Hit_{i+1,j}) ---
+    for r in range(board_size - 1):  # needs r+1 in bounds
+        for c in range(board_size):
+            sunk = get_var(board_size, 11, r, c)
+            h1 = get_var(board_size, 8, r, c)
+            h2 = get_var(board_size, 8, r + 1, c)
+            cnf.append([-sunk, h1])
+            cnf.append([-sunk, h2])
+            cnf.append([-h1, -h2, sunk])
+
+    # --- Sunk Submarine horizontal: Sunk_SM_{h,i,j} <=> (Hit_{i,j} ∧ Hit_{i,j+1} ∧ Hit_{i,j+2}) ---
+    for r in range(board_size):
+        for c in range(board_size - 2):  # needs c+2 in bounds
+            sunk = get_var(board_size, 12, r, c)
+            h1 = get_var(board_size, 8, r, c)
+            h2 = get_var(board_size, 8, r, c + 1)
+            h3 = get_var(board_size, 8, r, c + 2)
+            cnf.append([-sunk, h1])
+            cnf.append([-sunk, h2])
+            cnf.append([-sunk, h3])
+            cnf.append([-h1, -h2, -h3, sunk])
+
+    # --- Sunk Submarine vertical: Sunk_SM_{v,i,j} <=> (Hit_{i,j} ∧ Hit_{i+1,j} ∧ Hit_{i+2,j}) ---
+    for r in range(board_size - 2):  # needs r+2 in bounds
+        for c in range(board_size):
+            sunk = get_var(board_size, 13, r, c)
+            h1 = get_var(board_size, 8, r, c)
+            h2 = get_var(board_size, 8, r + 1, c)
+            h3 = get_var(board_size, 8, r + 2, c)
+            cnf.append([-sunk, h1])
+            cnf.append([-sunk, h2])
+            cnf.append([-sunk, h3])
+            cnf.append([-h1, -h2, -h3, sunk])
+
+    return cnf
+
+
+def add_all_parts_sunk_consequences(board_size, cnf):
+    """Adds the AllPartsSunk consequence constraints.
+
+    Once a ship is fully sunk, the surrounding tiles (adjacent + diagonals) are
+    known to be empty (¬SP). Each consequence Sunk_X -> (¬SP_a ∧ ¬SP_b ∧ ...) is
+    encoded as one binary clause per surrounding cell: [-Sunk_X, -SP_a].
+
+    Surrounding cells per README:
+      - PB horizontal at (i,j):   (i, j-1), (i, j+2), (i-1, j), (i-1, j+1),
+                                  (i+1, j), (i+1, j+1)
+      - PB vertical   at (i,j):   (i-1, j), (i+2, j), (i, j-1), (i+1, j-1),
+                                  (i, j+1), (i+1, j+1)
+      - SM horizontal at (i,j):   (i, j-1), (i, j+3),
+                                  (i-1, j), (i-1, j+1), (i-1, j+2),
+                                  (i+1, j), (i+1, j+1), (i+1, j+2)
+      - SM vertical   at (i,j):   (i-1, j), (i+3, j),
+                                  (i, j-1), (i+1, j-1), (i+2, j-1),
+                                  (i, j+1), (i+1, j+1), (i+2, j+1)
+
+    All surrounding cells are guarded by board-bound checks.
+    """
+
+    def _add_neg_sp(sunk_var, neighbors):
+        """Helper: for each (r,c) in `neighbors` that is in bounds, append [-sunk, -SP_{r,c}]."""
+        for (nr, nc) in neighbors:
+            if 0 <= nr < board_size and 0 <= nc < board_size:
+                cnf.append([-sunk_var, -get_var(board_size, 1, nr, nc)])
+
+    # --- Sunk PB horizontal: Sunk_PB_{h,i,j} -> 6 surrounding cells are not SP ---
+    for r in range(board_size):
+        for c in range(board_size - 1):
+            sunk = get_var(board_size, 10, r, c)
+            neighbors = [
+                (r,     c - 1),  # left of first part
+                (r,     c + 2),  # right of second part
+                (r - 1, c),      # above first part
+                (r - 1, c + 1),  # above second part
+                (r + 1, c),      # below first part
+                (r + 1, c + 1),  # below second part
+            ]
+            _add_neg_sp(sunk, neighbors)
+
+    # --- Sunk PB vertical: Sunk_PB_{v,i,j} -> 6 surrounding cells are not SP ---
+    for r in range(board_size - 1):
+        for c in range(board_size):
+            sunk = get_var(board_size, 11, r, c)
+            neighbors = [
+                (r - 1, c),      # above first part
+                (r + 2, c),      # below second part
+                (r,     c - 1),  # left of first part
+                (r + 1, c - 1),  # left of second part
+                (r,     c + 1),  # right of first part
+                (r + 1, c + 1),  # right of second part
+            ]
+            _add_neg_sp(sunk, neighbors)
+
+    # --- Sunk SM horizontal: Sunk_SM_{h,i,j} -> 8 surrounding cells are not SP ---
+    for r in range(board_size):
+        for c in range(board_size - 2):
+            sunk = get_var(board_size, 12, r, c)
+            neighbors = [
+                (r,     c - 1),  # left of first part
+                (r,     c + 3),  # right of third part
+                (r - 1, c),      # above first part
+                (r - 1, c + 1),  # above second part
+                (r - 1, c + 2),  # above third part
+                (r + 1, c),      # below first part
+                (r + 1, c + 1),  # below second part
+                (r + 1, c + 2),  # below third part
+            ]
+            _add_neg_sp(sunk, neighbors)
+
+    # --- Sunk SM vertical: Sunk_SM_{v,i,j} -> 8 surrounding cells are not SP ---
+    for r in range(board_size - 2):
+        for c in range(board_size):
+            sunk = get_var(board_size, 13, r, c)
+            neighbors = [
+                (r - 1, c),      # above first part
+                (r + 3, c),      # below third part
+                (r,     c - 1),  # left of first part
+                (r + 1, c - 1),  # left of second part
+                (r + 2, c - 1),  # left of third part
+                (r,     c + 1),  # right of first part
+                (r + 1, c + 1),  # right of second part
+                (r + 2, c + 1),  # right of third part
+            ]
+            _add_neg_sp(sunk, neighbors)
+
+    return cnf
