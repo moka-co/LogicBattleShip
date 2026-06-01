@@ -269,48 +269,14 @@ The `assumptions` parameter is key: it temporarily assumes a literal for a singl
 
 ---
 
-## Hunting Strategy with SAT
+## Implementation Notes
 
-The agent uses a two-mode strategy implemented in `src/game_logic.py`:
+The hunting strategies described above are implemented in `src/game_logic.py`. Key functions:
 
-1. **Random mode (default)**: when there are no "open hits" on the board, the agent picks a uniformly random unshot tile.
-2. **Hunting mode**: as soon as the agent has at least one *open hit* — a tile where $Hit_{i,j}$ is asserted but no Sunk variable covering that tile is yet asserted — the agent uses the SAT solver to choose the next shot from cells adjacent to the open hit(s).
+- `_get_unprocessed_hits(board_size, cnf)` — collects open hits (asserted $Hit_{r,c}$ not covered by any Sunk variable).
+- `get_simple_hunt_targets(board_size, cnf, shots_taken)` — enumerates all 8 neighbors of open hits without SAT reasoning (used by Strategy 1).
+- `get_intelligent_hunt_targets(board_size, cnf, shots_taken)` — performs SAT-guided forced/consistent classification of neighbors (used by Strategies 2 and 3).
+- `get_checkerboard_targets(board_size, shots_taken)` — returns unshot checkerboard cells (used by Strategy 3 in discovery mode).
+- `_propagate_sunk_variables(board_size, cnf, hit_r, hit_c)` — after each hit, checks whether any Sunk variables covering the hit cell are now entailed and asserts them as unit clauses.
 
-### Definitions
-
-- **Open hit**: a cell $(r,c)$ such that the unit clause $Hit_{r,c}$ is in the KB, but no Sunk variable (types 10–13) covering $(r,c)$ is asserted. In other words, the agent knows it hit a ship part there, but the corresponding ship has not yet been fully destroyed.
-- **Hunt candidate**: an unshot, in-bounds neighbor (all 8 directions: N, S, E, W, and diagonals) of an open hit. Diagonal neighbors are included because the Carrier is 2×2, so a diagonal cell can be part of the same ship.
-
-### Algorithm: `get_hunt_targets`
-
-The function `get_hunt_targets(board_size, cnf, shots_taken)` returns the next set of cells to shoot:
-
-1. Collect all **open hits** by scanning the unit clauses of the CNF for asserted $Hit_{r,c}$ variables, excluding those covered by an asserted Sunk variable.
-2. If no open hits exist, return an empty list (caller falls back to random).
-3. For each open hit $(hr, hc)$, enumerate all 8 neighbors (orthogonal + diagonal). Diagonals are necessary because the Carrier occupies a 2×2 block, so a diagonal neighbor of a hit cell can be part of the same Carrier.
-4. For each unshot, in-bounds neighbor $(nr, nc)$, query Glucose3 twice using `solver.solve(assumptions=[...])`:
-   - **Priority 1 — Forced ship part**: ask whether $KB \cup \{\neg SP_{nr,nc}\}$ is UNSAT. If it is, then $KB \models SP_{nr,nc}$ and the cell is logically guaranteed to contain a ship part. Return this cell immediately.
-   - **Priority 2 — Possible ship part**: ask whether $KB \cup \{SP_{nr,nc}\}$ is SAT. If it is, the cell is *consistent* with containing a ship part and is added to the candidate list.
-   - **Otherwise** (i.e. $KB \cup \{SP_{nr,nc}\}$ is UNSAT), the cell is logically guaranteed to be empty; skip it.
-5. Return the list of possible candidates.
-
-### Key implementation detail: assumptions, not assertions
-
-Glucose3's `solve(assumptions=[...])` method temporarily assumes the given literals are true **only for that single solve call**. This means the CNF itself is never mutated by the hunting logic — we can probe many hypotheses without polluting the KB. This is essential: we only want to *test* whether $SP_{nr,nc}$ is consistent, not commit to it.
-
-### Switching modes
-
-The agent switches modes automatically based on the state of the KB:
-
-- After every shot, `record_shot` appends the appropriate unit clauses.
-- After hits, `_propagate_sunk_variables` explicitly checks whether any Sunk variables covering the hit cell are now entailed, and asserts them as unit clauses. This is necessary because the SAT solver derives sunk truth internally but does not add unit clauses to the CNF.
-- When a Sunk variable is asserted, `add_all_parts_sunk_consequences` clauses propagate $\neg SP$ to surrounding cells, which removes those open hits from the open-hit set.
-- Therefore, the agent transitions from hunting back to random simply by checking on each turn whether `_get_open_hits` returns an empty list.
-
-### Why this works
-
-This strategy implements the agent strategy from the previous section precisely:
-
-- The "forced" check (Priority 1) is the entailment query $KB \models SP_{i,j}$ — exactly the rule "if $KB \land \neg SP_{i,j}$ is UNSAT, shoot $(i,j)$."
-- The "possible" check (Priority 2) is a relaxed version that picks logically consistent candidates when no cell is strictly forced. This handles the realistic case where the agent has one hit but does not yet know the ship's orientation.
-- Restricting candidates to the 8 neighbors of open hits avoids wasteful solver queries on distant tiles. Diagonals are included to handle the 2×2 Carrier, while the SAT solver automatically eliminates diagonal candidates that are inconsistent with any ship placement.
+The agent transitions between discovery and hunting modes automatically: on each turn, if `_get_unprocessed_hits` returns a non-empty list, the agent hunts; otherwise it discovers.
