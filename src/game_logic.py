@@ -268,7 +268,6 @@ def simulate_game(board_size, shots, truth_board, agent_board, use_gui=False):
 
         was_hit = is_ship_part(board_size, truth_board.cnf, r, c)
         record_shot(board_size, agent_board.cnf, r, c, was_hit)
-        record_shot(board_size, truth_board.cnf, r, c, was_hit)
         shot_history.append((r, c, was_hit))
         print(f"Shot at ({r}, {c}) - Hit: {was_hit}")
 
