@@ -8,7 +8,7 @@ We refer to both the agent and the human that plays against the agent as player(
 Battleship game is a 1v1 game where each player has a board composed of $N \times N$ tiles. Before the start of the game, the players can position a number $m$ of ships. (In this case we consider $2 \le m \le 4$ ships).
 Ships are of different kinds and sizes. We distinguish an easier version of the game with a 5x5 board and two kinds of ships: $1\times 2$ and $1\times 4$. Ships must be placed inside the grid. Two ships cannot be placed adjacently and must be separated by a one‑tile distance.
 
-In the 10x10 board we have the following kind of ships: $1\times 2, 1\times 3, 1\times 5, 4\times 4$. 
+In the 10x10 board we have the following kind of ships: $1\times 2, 1\times 3, 1\times 4, 2\times 2$. 
 
 The opponent's board is hidden. Each turn a player can shoot one of the hidden opponent's tiles, hoping to hit a part of a ship. A player cannot shoot an already shot tile (it would be illogical).
 
@@ -141,20 +141,22 @@ If the agent shot and horizontal neighbours are misses, then the ship must be ve
 
 ### Sinking Ships
 
+Sinking biconditionals are **conditioned on the placement variable** to prevent false sinking triggers. Without this, hitting 2 adjacent cells of a Submarine would falsely trigger a PatrolBoat sunk, causing the agent to stop hunting near those cells.
+
 **Sunk Patrol Boat (both directions)**:
-- $Sunk_{PatrolBoat_{h,i,j}} \iff (Hit_{i,j} \land Hit_{i,j+1})$
-- $Sunk_{PatrolBoat_{v,i,j}} \iff Hit_{i,j} \land Hit_{i+1,j}$
+- $Sunk_{PatrolBoat_{h,i,j}} \iff (PB_{h,i,j} \land Hit_{i,j} \land Hit_{i,j+1})$
+- $Sunk_{PatrolBoat_{v,i,j}} \iff (PB_{v,i,j} \land Hit_{i,j} \land Hit_{i+1,j})$
 
 **Sunk Submarine (both directions)**
-- $Sunk_{Submarine_{h,i,j}} \iff (Hit_{i,j} \land Hit_{i,j+1} \land Hit_{i,j+2})$ 
-- $Sunk_{Submarine_{v,i,j}} \iff (Hit_{i,j} \land Hit_{i+1,j} \land Hit_{i+2,j})$
+- $Sunk_{Submarine_{h,i,j}} \iff (SM_{h,i,j} \land Hit_{i,j} \land Hit_{i,j+1} \land Hit_{i,j+2})$ 
+- $Sunk_{Submarine_{v,i,j}} \iff (SM_{v,i,j} \land Hit_{i,j} \land Hit_{i+1,j} \land Hit_{i+2,j})$
 
 **Sunk Battleship (both directions)**
-- $Sunk_{Battleship_{h,i,j}} \iff (Hit_{i,j} \land Hit_{i,j+1} \land Hit_{i,j+2} \land Hit_{i,j+3})$ 
-- $Sunk_{Battleship_{v,i,j}} \iff (Hit_{i,j} \land Hit_{i+1,j} \land Hit_{i+2,j} \land Hit_{i+3,j})$
+- $Sunk_{Battleship_{h,i,j}} \iff (BS_{h,i,j} \land Hit_{i,j} \land Hit_{i,j+1} \land Hit_{i,j+2} \land Hit_{i,j+3})$ 
+- $Sunk_{Battleship_{v,i,j}} \iff (BS_{v,i,j} \land Hit_{i,j} \land Hit_{i+1,j} \land Hit_{i+2,j} \land Hit_{i+3,j})$
 
 **Sunk Carrier**
-- $Sunk_{Carrier_{i,j}} \iff (Hit_{i,j} \land Hit_{i,j+1} \land Hit_{i+1,j} \land Hit_{i+1,j+1})$
+- $Sunk_{Carrier_{i,j}} \iff (CR_{i,j} \land Hit_{i,j} \land Hit_{i,j+1} \land Hit_{i+1,j} \land Hit_{i+1,j+1})$
 
 
 **AllPartsSunk Consequences**
@@ -186,7 +188,13 @@ $Sunk_{CR_{i,j}} \implies \neg SP_{i-1,j} \land \neg SP_{i-1,j+1} \land \neg SP_
 - On a hit: $\text{Assert: } Hit_{i,j}$ which immediately entails: $SP_{i,j}$
 - Additionally, after every shot: $\text{Assert: } Shot_{i,j}$
 
+**Input validation**: `record_shot` validates that the cell is within bounds and has not already been shot, raising `ValueError` otherwise.
+
+**Sunk variable propagation**: After each hit, the agent explicitly checks whether any Sunk variables covering the hit cell are now entailed by the KB (via `_propagate_sunk_variables`). This is necessary because sunk variables are defined via biconditionals — the SAT solver can derive their truth internally, but does not add unit clauses to the CNF. The propagation function uses the solver to check $KB \land \neg Sunk_{X}$ for each candidate sunk variable; if UNSAT, the sunk variable is asserted as a unit clause. Only sunk variables whose ship footprint includes the just-hit cell are checked, for efficiency.
+
 The KB grows monotonically, facts are only added never retracted since observations in Battleship are permanent.
+
+**Early termination**: The simulation loop checks after each shot whether all ship cells have been hit. If so, the game ends immediately rather than continuing to fire shots.
 
 ## Agent Strategy
 Formally, at each turn the agent must select a tile $(i,j)$ such that $\neg Shot_{i,j}$ (not yet shot).
@@ -198,6 +206,7 @@ Formally, at each turn the agent must select a tile $(i,j)$ such that $\neg Shot
 **Heuristics**:
 - Randomly uniform: $Choose(i,j) \text{ uniformly from } \{(i,j)| \neg Shot_{i,j}\}$
 - Every Other Two: at each step, if $Hit(i,j)$ and $\neg SP(i,j)$ then choose either $Choose(i+2,j)$ or $Choose(i,j+2)$ if the choosen coordinates are inside the grid. If there is not previously hitten tiles, start from $(0,0)$. 
+- Checkerboard + Intelligent: when no open hits exist, the agent picks from a checkerboard pattern (cells where $(r + c) \mod 2 = 0$), which guarantees any ship of length $\geq 2$ overlaps at least one checkerboard cell. When open hits exist, switches to SAT-guided intelligent hunting.
 
 
 **SAT Query**:
@@ -211,8 +220,8 @@ At each turn, for every unshot tile $(i,j)$, the agents submits: $SOLVE(KB \cup 
 - PyGame for the game interface and multiplayer (agent vs agent and local player vs agent)
 
 ## Evaluation
-- Baseline: pure random
-- Compare baseline vs every other two
+- Baseline: pure random (simple strategy)
+- Compare baseline vs intelligent (SAT-guided) vs checkerboard + intelligent
 - Metrics: average turns to win and hit rate over 1000 games
 
 
@@ -231,7 +240,7 @@ The agent uses a two-mode strategy implemented in `src/game_logic.py`:
 ### Definitions
 
 - **Open hit**: a cell $(r,c)$ such that the unit clause $Hit_{r,c}$ is in the KB, but no Sunk variable (types 10–13) covering $(r,c)$ is asserted. In other words, the agent knows it hit a ship part there, but the corresponding ship has not yet been fully destroyed.
-- **Hunt candidate**: an unshot, in-bounds neighbor (N, S, E, W only — never diagonals, since ships are linear) of an open hit.
+- **Hunt candidate**: an unshot, in-bounds neighbor (all 8 directions: N, S, E, W, and diagonals) of an open hit. Diagonal neighbors are included because the Carrier is 2×2, so a diagonal cell can be part of the same ship.
 
 ### Algorithm: `get_hunt_targets`
 
@@ -239,7 +248,7 @@ The function `get_hunt_targets(board_size, cnf, shots_taken)` returns the next s
 
 1. Collect all **open hits** by scanning the unit clauses of the CNF for asserted $Hit_{r,c}$ variables, excluding those covered by an asserted Sunk variable.
 2. If no open hits exist, return an empty list (caller falls back to random).
-3. For each open hit $(hr, hc)$, enumerate the 4 orthogonal neighbors $(hr \pm 1, hc)$ and $(hr, hc \pm 1)$.
+3. For each open hit $(hr, hc)$, enumerate all 8 neighbors (orthogonal + diagonal). Diagonals are necessary because the Carrier occupies a 2×2 block, so a diagonal neighbor of a hit cell can be part of the same Carrier.
 4. For each unshot, in-bounds neighbor $(nr, nc)$, query Glucose3 twice using `solver.solve(assumptions=[...])`:
    - **Priority 1 — Forced ship part**: ask whether $KB \cup \{\neg SP_{nr,nc}\}$ is UNSAT. If it is, then $KB \models SP_{nr,nc}$ and the cell is logically guaranteed to contain a ship part. Return this cell immediately.
    - **Priority 2 — Possible ship part**: ask whether $KB \cup \{SP_{nr,nc}\}$ is SAT. If it is, the cell is *consistent* with containing a ship part and is added to the candidate list.
@@ -255,8 +264,8 @@ Glucose3's `solve(assumptions=[...])` method temporarily assumes the given liter
 The agent switches modes automatically based on the state of the KB:
 
 - After every shot, `record_shot` appends the appropriate unit clauses.
-- After hits, the `add_sinking_constraints` biconditionals automatically cause a Sunk variable to be propagated to true (the SAT solver implicitly handles this).
-- When all parts of a ship are sunk, `add_all_parts_sunk_consequences` clauses propagate $\neg SP$ to surrounding cells, which removes those open hits from the open-hit set.
+- After hits, `_propagate_sunk_variables` explicitly checks whether any Sunk variables covering the hit cell are now entailed, and asserts them as unit clauses. This is necessary because the SAT solver derives sunk truth internally but does not add unit clauses to the CNF.
+- When a Sunk variable is asserted, `add_all_parts_sunk_consequences` clauses propagate $\neg SP$ to surrounding cells, which removes those open hits from the open-hit set.
 - Therefore, the agent transitions from hunting back to random simply by checking on each turn whether `_get_open_hits` returns an empty list.
 
 ### Why this works
@@ -265,4 +274,4 @@ This strategy implements the agent strategy from the previous section precisely:
 
 - The "forced" check (Priority 1) is the entailment query $KB \models SP_{i,j}$ — exactly the rule "if $KB \land \neg SP_{i,j}$ is UNSAT, shoot $(i,j)$."
 - The "possible" check (Priority 2) is a relaxed version that picks logically consistent candidates when no cell is strictly forced. This handles the realistic case where the agent has one hit but does not yet know the ship's orientation.
-- Restricting candidates to the orthogonal neighbors of open hits avoids wasteful solver queries on tiles that are physically impossible ship continuations.
+- Restricting candidates to the 8 neighbors of open hits avoids wasteful solver queries on distant tiles. Diagonals are included to handle the 2×2 Carrier, while the SAT solver automatically eliminates diagonal candidates that are inconsistent with any ship placement.
