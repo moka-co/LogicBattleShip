@@ -207,14 +207,17 @@ def get_hunt_targets(board_size, cnf, shots_taken):
             with Glucose3(bootstrap_with=cnf.clauses) as solver:
                 if not solver.solve(assumptions=[-sp_var]):
                     # Forced ship part: must shoot here.
+                    print(f"  Found FORCED target at ({nr}, {nc}) for open hit ({hr}, {hc})")
                     return [(nr, nc)]
 
             # Priority 2: Is SP_{nr,nc} POSSIBLE? Check if KB ∧ SP is SAT.
             with Glucose3(bootstrap_with=cnf.clauses) as solver:
                 if solver.solve(assumptions=[sp_var]):
                     candidates.append((nr, nc))
+                    print(f"  Found POSSIBLE target at ({nr}, {nc}) for open hit ({hr}, {hc})")
             # If neither forced nor possible, it's impossible (¬SP entailed); skip.
 
+    print(f"  Hunt targets for open hits {open_hits}: {candidates}")
     return candidates
 
 
@@ -245,7 +248,7 @@ def simulate_game(board_size, shots, truth_board, agent_board, use_gui=False):
             candidates = get_hunt_targets(board_size, agent_board.cnf, shots_taken)
             if candidates:
                 target = candidates[0]
-                print(f"Hunting target: {target}")
+                print(f"Hunting target: {target} (continuing hunt for open hits: {open_hits})")
 
         # Fallback to random if no hunting target was found.
         if not target:
@@ -255,7 +258,10 @@ def simulate_game(board_size, shots, truth_board, agent_board, use_gui=False):
                 print("All cells have been shot.")
                 break
             target = random.choice(unshot)
-            print(f"Random target: {target}")
+            if open_hits:
+                print(f"Random target: {target} (no valid hunt targets found, but open hits remain: {open_hits})")
+            else:
+                print(f"Random target: {target}")
 
         r, c = target
         shots_taken.add((r, c))
