@@ -376,6 +376,61 @@ def add_battleship_non_adjacent_constraints(board_size, cnf):
     return cnf
 
 
+# Carrier (2x2)
+def add_carrier_to_board(board_size, cnf, occupied=None):
+    """Adds exactly one carrier to the board by choosing a random valid placement."""
+    if occupied is None:
+        occupied = set()
+
+    valid_placements = []
+    for r in range(board_size - 1):
+        for c in range(board_size - 1):
+            cells = [(r, c), (r, c + 1), (r + 1, c), (r + 1, c + 1)]
+            if not any(cell in occupied for cell in cells):
+                valid_placements.append((r, c, cells))
+
+    if not valid_placements:
+        raise RuntimeError("No valid placement for carrier")
+
+    r, c, cells = random.choice(valid_placements)
+    cr_var = get_var(board_size, 18, r, c)
+    cnf.append([cr_var])
+
+    for (cr, cc) in cells:
+        cnf.append([get_var(board_size, 1, cr, cc)])
+
+    return occupied | _get_forbidden_cells(board_size, cells)
+
+
+def add_carrier_constraints(board_size, cnf):
+    all_placements = []
+    for r in range(board_size - 1):
+        for c in range(board_size - 1):
+            var = get_var(board_size, 18, r, c)
+            all_placements.append(var)
+            # Carrier_{i,j} -> (SP_{i,j} AND SP_{i,j+1} AND SP_{i+1,j} AND SP_{i+1,j+1})
+            for dr in range(2):
+                for dc in range(2):
+                    cnf.append([-var, get_var(board_size, 1, r + dr, c + dc)])
+
+    cnf.append(list(all_placements))
+    for i in range(len(all_placements)):
+        for j in range(i + 1, len(all_placements)):
+            cnf.append([-all_placements[i], -all_placements[j]])
+    return cnf
+
+
+def add_carrier_non_adjacent_constraints(board_size, cnf):
+    for r in range(board_size - 1):
+        for c in range(board_size - 1):
+            cr_var = get_var(board_size, 18, r, c)
+            cells = [(r, c), (r, c + 1), (r + 1, c), (r + 1, c + 1)]
+            for nr, nc in _get_forbidden_cells(board_size, cells):
+                if (nr, nc) not in cells:
+                    cnf.append([-cr_var, -get_var(board_size, 1, nr, nc)])
+    return cnf
+
+
 class PatrolBoatFactory:
     def __init__(self, board_size):
         self.board_size = board_size
@@ -412,5 +467,18 @@ class BattleshipFactory:
         occupied = add_battleship_to_board(self.board_size, cnf, occupied)
         add_battleship_constraints(self.board_size, cnf)
         add_battleship_non_adjacent_constraints(self.board_size, cnf)
+        return occupied
+
+
+class CarrierFactory:
+    def __init__(self, board_size):
+        self.board_size = board_size
+
+    def build(self, cnf, occupied=None):
+        if occupied is None:
+            occupied = set()
+        occupied = add_carrier_to_board(self.board_size, cnf, occupied)
+        add_carrier_constraints(self.board_size, cnf)
+        add_carrier_non_adjacent_constraints(self.board_size, cnf)
         return occupied
 

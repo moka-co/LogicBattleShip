@@ -59,12 +59,14 @@ def _sunk_covers_cell(board_size, sunk_type, sr, sc, r, c):
         return r == sr and sc <= c <= sc + 3
     if sunk_type == 17:
         return c == sc and sr <= r <= sr + 3
+    if sunk_type == 19:
+        return sr <= r <= sr + 1 and sc <= c <= sc + 1
     return False
 
 
 def _is_cell_in_sunk_ship(board_size, cnf, r, c):
     unit_clauses = _get_unit_clause_set(cnf)
-    for sunk_type in (10, 11, 12, 13, 16, 17):
+    for sunk_type in (10, 11, 12, 13, 16, 17, 19):
         if sunk_type == 10:
             r_range, c_range = range(board_size), range(board_size - 1)
         elif sunk_type == 11:
@@ -75,8 +77,10 @@ def _is_cell_in_sunk_ship(board_size, cnf, r, c):
             r_range, c_range = range(board_size - 2), range(board_size)
         elif sunk_type == 16:
             r_range, c_range = range(board_size), range(board_size - 3)
-        else:
+        elif sunk_type == 17:
             r_range, c_range = range(board_size - 3), range(board_size)
+        else:
+            r_range, c_range = range(board_size - 1), range(board_size - 1)
         for sr in r_range:
             for sc in c_range:
                 sunk_var = get_var(board_size, sunk_type, sr, sc)
@@ -111,7 +115,8 @@ def _get_sunk_ships_status(board_size, cnf):
                      any(get_var(board_size, 13, r, c) in unit_clauses for r in range(board_size - 2) for c in range(board_size))
     battleship_sunk = any(get_var(board_size, 16, r, c) in unit_clauses for r in range(board_size) for c in range(board_size - 3)) or \
                       any(get_var(board_size, 17, r, c) in unit_clauses for r in range(board_size - 3) for c in range(board_size))
-    return {'patrol_boat': patrol_boat_sunk, 'submarine': submarine_sunk, 'battleship': battleship_sunk}
+    carrier_sunk = any(get_var(board_size, 19, r, c) in unit_clauses for r in range(board_size - 1) for c in range(board_size - 1))
+    return {'patrol_boat': patrol_boat_sunk, 'submarine': submarine_sunk, 'battleship': battleship_sunk, 'carrier': carrier_sunk}
 
 
 def get_intelligent_hunt_targets(board_size, cnf, shots_taken):

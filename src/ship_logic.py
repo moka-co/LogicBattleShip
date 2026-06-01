@@ -236,6 +236,15 @@ def add_sinking_constraints(board_size, cnf):
                 cnf.append([-sunk, h])
             cnf.append([-h for h in hits] + [sunk])
 
+    # --- Sunk Carrier: Sunk_CR_{i,j} <=> (Hit_{i,j} ∧ Hit_{i,j+1} ∧ Hit_{i+1,j} ∧ Hit_{i+1,j+1}) ---
+    for r in range(board_size - 1):
+        for c in range(board_size - 1):
+            sunk = get_var(board_size, 19, r, c)
+            hits = [get_var(board_size, 8, r + dr, c + dc) for dr in range(2) for dc in range(2)]
+            for h in hits:
+                cnf.append([-sunk, h])
+            cnf.append([-h for h in hits] + [sunk])
+
     return cnf
 
 
@@ -340,6 +349,14 @@ def add_all_parts_sunk_consequences(board_size, cnf):
         for c in range(board_size):
             sunk = get_var(board_size, 17, r, c)
             cells = _get_ship_cells('v', r, c, 4)
+            neighbors = [n for n in _get_forbidden_cells(board_size, cells) if n not in cells]
+            _add_neg_sp(sunk, neighbors)
+
+    # --- Sunk Carrier: Sunk_CR_{i,j} -> 8 surrounding cells are not SP ---
+    for r in range(board_size - 1):
+        for c in range(board_size - 1):
+            sunk = get_var(board_size, 19, r, c)
+            cells = [(r, c), (r, c + 1), (r + 1, c), (r + 1, c + 1)]
             neighbors = [n for n in _get_forbidden_cells(board_size, cells) if n not in cells]
             _add_neg_sp(sunk, neighbors)
 

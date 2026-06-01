@@ -20,6 +20,8 @@
 # 15 = battleship vertical placement (BS_{v,i,j})
 # 16 = sunk battleship horizontal (Sunk_BS_{h,i,j})
 # 17 = sunk battleship vertical   (Sunk_BS_{v,i,j})
+# 18 = carrier placement (CR_{i,j})
+# 19 = sunk carrier (Sunk_CR_{i,j})
 def get_var(board_size, v_type, r, c):
     return v_type * (board_size * board_size) + r * board_size + c + 1
 
