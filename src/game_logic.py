@@ -6,7 +6,7 @@ from src.utils import *
 from src.gui import run_gui
 
 
-def _get_unprocessed_hits(cnf, board_size):
+def _get_unprocessed_hits(board_size, cnf):
         return [(r, c) for r in range(board_size) for c in range(board_size)
                 if get_var(board_size, 8, r, c) in _get_unit_clause_set(cnf) and not _is_cell_in_sunk_ship(board_size, cnf, r, c)]
 
@@ -38,7 +38,7 @@ def visualize_board(board_size, cnf):
 
 
 def is_ship_part(board_size, cnf, r, c):
-    unit_clauses = {clause[0] for clause in cnf.clauses if len(c) == 1}
+    unit_clauses = {clause[0] for clause in cnf.clauses if len(clause) == 1}
     return get_var(board_size, 1, r, c) in unit_clauses
 
 
