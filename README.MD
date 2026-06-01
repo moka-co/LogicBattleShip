@@ -115,6 +115,8 @@ From the rule of the game we know that:
 - **PatrolBoat vertical**: $PB_{v,i,j} \implies (\neg SP_{i-1,j} \land \neg SP_{i+2,j} \land \neg SP_{i,j+1} \land \neg SP_{i,j-1} \land \neg SP_{i+1,j+1} \land \neg SP_{i+1,j-1})$
 - **Submarine horizontal**: $SM_{h,i,j} \implies (\neg SP_{i,j-1} \land \neg SP_{i,j+3} \land \neg SP_{i+1,j} \land \neg SP_{i-1,j} \land \neg SP_{i+1,j-1} \land \neg SP_{i-1,j-1} \land \neg SP_{i+1,j+1} \land \neg SP_{i-1,j+1} \land \neg SP_{i+1,j+2} \land \neg SP_{i-1,j+2})$
 - **Submarine vertical**: $SM_{v,i,j} \implies (\neg SP_{i-1,j} \land \neg SP_{i+3,j} \land \neg SP_{i,j+1} \land \neg SP_{i,j-1} \land \neg SP_{i-1,j+1} \land \neg SP_{i-1,j-1} \land \neg SP_{i+1,j+1} \land \neg SP_{i+1,j-1} \land \neg SP_{i+2,j+1} \land \neg SP_{i+2,j-1})$
+- **Battleship horizontal**: $BS_{h,i,j} \implies (\neg SP_{i,j-1} \land \neg SP_{i,j+4} \land \neg SP_{i+1,j} \land \neg SP_{i-1,j} \land \neg SP_{i+1,j-1} \land \neg SP_{i-1,j-1} \land \neg SP_{i+1,j+1} \land \neg SP_{i-1,j+1} \land \neg SP_{i+1,j+2} \land \neg SP_{i-1,j+2} \land \neg SP_{i+1,j+3} \land \neg SP_{i-1,j+3})$
+- **Battleship vertical**: $BS_{v,i,j} \implies (\neg SP_{i-1,j} \land \neg SP_{i+4,j} \land \neg SP_{i,j+1} \land \neg SP_{i,j-1} \land \neg SP_{i-1,j+1} \land \neg SP_{i-1,j-1} \land \neg SP_{i+1,j+1} \land \neg SP_{i+1,j-1} \land \neg SP_{i+2,j+1} \land \neg SP_{i+2,j-1} \land \neg SP_{i+3,j+1} \land \neg SP_{i+3,j-1})$
 
 ### Shot, Hit and Miss tiles
 - $Shot_{i,j}$ true if a tile has been shoot
