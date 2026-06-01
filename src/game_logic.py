@@ -123,47 +123,45 @@ def _get_sunk_ships_status(board_size, cnf):
 
 
 def get_intelligent_hunt_targets(board_size, cnf, shots_taken):
+    """Uses SAT solver to find logically consistent or forced ship parts near open hits."""
     unprocessed_hits = _get_unprocessed_hits(board_size, cnf)
     if not unprocessed_hits:
         return []
-    unit_clauses = _get_unit_clause_set(cnf)
-    sunk_status = _get_sunk_ships_status(board_size, cnf)
-    all_hits = {(r, c) for r in range(board_size) for c in range(board_size) if get_var(board_size, 8, r, c) in unit_clauses}
-    all_misses = {(r, c) for r in range(board_size) for c in range(board_size) if get_var(board_size, 9, r, c) in unit_clauses}
+
+    solver = Glucose3()
+    for clause in cnf.clauses:
+        solver.add_clause(clause)
+
     candidates = []
+    forced_targets = []
     seen = set()
+
     for (hr, hc) in unprocessed_hits:
-        adjacent_horizontal = [(hr, hc + dc) for dc in [-1, 1] if 0 <= hc + dc < board_size and (hr, hc + dc) in all_hits]
-        adjacent_vertical = [(hr + dr, hc) for dr in [-1, 1] if 0 <= hr + dr < board_size and (hr + dr, hc) in all_hits]
-        possible_ship_lengths = [2, 3]
-        if adjacent_horizontal and not adjacent_vertical:
-            all_h = [(hr, hc)] + adjacent_horizontal
-            min_c, max_c = min(c for r, c in all_h), max(c for r, c in all_h)
-            current_len = max_c - min_c + 1
-            for target_len in possible_ship_lengths:
-                if current_len < target_len:
-                    if min_c - 1 >= 0 and (hr, min_c - 1) not in shots_taken: candidates.append((hr, min_c - 1))
-                    if max_c + 1 < board_size and (hr, max_c + 1) not in shots_taken: candidates.append((hr, max_c + 1))
-        elif adjacent_vertical and not adjacent_horizontal:
-            all_v = [(hr, hc)] + adjacent_vertical
-            min_r, max_r = min(r for r, c in all_v), max(r for r, c in all_v)
-            current_len = max_r - min_r + 1
-            for target_len in possible_ship_lengths:
-                if current_len < target_len:
-                    if min_r - 1 >= 0 and (min_r - 1, hc) not in shots_taken: candidates.append((min_r - 1, hc))
-                    if max_r + 1 < board_size and (max_r + 1, hc) not in shots_taken: candidates.append((max_r + 1, hc))
-        else:
-            neighbors = [
-                (hr - 1, hc), (hr + 1, hc), (hr, hc - 1), (hr, hc + 1),
-                (hr - 1, hc - 1), (hr - 1, hc + 1), (hr + 1, hc - 1), (hr + 1, hc + 1)
-            ]
-            for nr, nc in neighbors:
-                if 0 <= nr < board_size and 0 <= nc < board_size and (nr, nc) not in shots_taken:
-                    candidates.append((nr, nc))
-        for nr, nc in candidates:
-            if (nr, nc) not in seen:
-                seen.add((nr, nc))
-    return candidates
+        # For Carrier (2x2) and others, check all 8 neighbors
+        neighbors = [
+            (hr + dr, hc + dc) 
+            for dr in [-1, 0, 1] for dc in [-1, 0, 1] 
+            if not (dr == 0 and dc == 0)
+        ]
+        
+        for nr, nc in neighbors:
+            if not (0 <= nr < board_size and 0 <= nc < board_size):
+                continue
+            if (nr, nc) in shots_taken or (nr, nc) in seen:
+                continue
+            
+            seen.add((nr, nc))
+            sp_var = get_var(board_size, 1, nr, nc)
+            
+            # Priority 1: Is this cell FORCED to be a ship part? (KB |= SP)
+            # Check if KB & ~SP is UNSAT
+            if not solver.solve(assumptions=[-sp_var]):
+                forced_targets.append((nr, nc))
+            # Priority 2: Is this cell CONSISTENT with being a ship part? (KB & SP is SAT)
+            elif solver.solve(assumptions=[sp_var]):
+                candidates.append((nr, nc))
+
+    return forced_targets if forced_targets else candidates
 
 
 def get_checkerboard_targets(board_size, shots_taken):
