@@ -1,4 +1,4 @@
-from src.utils import get_var
+from src.utils import get_var, _get_ship_cells, _get_forbidden_cells
 
 
 def add_shot_hit_miss_constraints(board_size, cnf):
