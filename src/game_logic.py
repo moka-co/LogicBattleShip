@@ -199,9 +199,10 @@ class SimulateSimpleGame(BaseSimulateGame):
             target, active = strategy.get_hunt_candidates(self.board_size, self.agent_board.cnf, self.shots_taken)
             if not active: break
             self.shots_taken.add(target)
-            was_hit = is_ship_part(self.board_size, self.truth_board.cnf, target[0], target[1])
-            record_shot(self.board_size, self.agent_board.cnf, target[0], target[1], was_hit)
-            self.shot_history.append((target[0], target[1], was_hit))
+            r, c = target
+            was_hit = is_ship_part(self.board_size, self.truth_board.cnf, r, c)
+            record_shot(self.board_size, self.agent_board.cnf, r, c, was_hit)
+            self.shot_history.append((r, c, was_hit))
         self.finalize_game(all_ship_cells)
 
 
@@ -217,7 +218,8 @@ class SimulateIntelligentGame(BaseSimulateGame):
                 if not unshot: break
                 target = random.choice(unshot)
             self.shots_taken.add(target)
-            was_hit = is_ship_part(self.board_size, self.truth_board.cnf, target[0], target[1])
-            record_shot(self.board_size, self.agent_board.cnf, target[0], target[1], was_hit)
-            self.shot_history.append((target[0], target[1], was_hit))
+            r, c = target
+            was_hit = is_ship_part(self.board_size, self.truth_board.cnf, r, c)
+            record_shot(self.board_size, self.agent_board.cnf, r, c, was_hit)
+            self.shot_history.append((r, c, was_hit))
         self.finalize_game(all_ship_cells)
