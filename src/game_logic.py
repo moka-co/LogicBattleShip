@@ -7,12 +7,20 @@ from src.gui import run_gui
 
 
 def _get_unprocessed_hits(board_size, cnf):
+        unit_clauses = _get_unit_clause_set(cnf)
+        sunk_covered = _get_sunk_covered_cells(board_size, cnf)
         return [(r, c) for r in range(board_size) for c in range(board_size)
-                if get_var(board_size, 8, r, c) in _get_unit_clause_set(cnf) and not _is_cell_in_sunk_ship(board_size, cnf, r, c)]
+                if get_var(board_size, 8, r, c) in unit_clauses and (r, c) not in sunk_covered]
 
 def record_shot(board_size, cnf, r, c, was_hit):
     """Records a shot outcome by appending unit clauses to the CNF."""
-    cnf.append([get_var(board_size, 7, r, c)])
+    if not (0 <= r < board_size and 0 <= c < board_size):
+        raise ValueError(f"Shot ({r}, {c}) is out of bounds for board size {board_size}")
+    shot_var = get_var(board_size, 7, r, c)
+    unit_clauses = _get_unit_clause_set(cnf)
+    if shot_var in unit_clauses:
+        raise ValueError(f"Cell ({r}, {c}) has already been shot")
+    cnf.append([shot_var])
     if was_hit:
         cnf.append([get_var(board_size, 8, r, c)])
     else:
@@ -64,8 +72,14 @@ def _sunk_covers_cell(board_size, sunk_type, sr, sc, r, c):
     return False
 
 
-def _is_cell_in_sunk_ship(board_size, cnf, r, c):
+def _get_sunk_covered_cells(board_size, cnf):
+    """Precomputes and returns the set of all cells covered by asserted Sunk variables.
+    
+    This replaces the per-cell _is_cell_in_sunk_ship scan with a single O(sunk_positions)
+    pass, after which membership checks are O(1).
+    """
     unit_clauses = _get_unit_clause_set(cnf)
+    covered = set()
     for sunk_type in (10, 11, 12, 13, 16, 17, 19):
         if sunk_type == 10:
             r_range, c_range = range(board_size), range(board_size - 1)
@@ -84,9 +98,28 @@ def _is_cell_in_sunk_ship(board_size, cnf, r, c):
         for sr in r_range:
             for sc in c_range:
                 sunk_var = get_var(board_size, sunk_type, sr, sc)
-                if sunk_var in unit_clauses and _sunk_covers_cell(board_size, sunk_type, sr, sc, r, c):
-                    return True
-    return False
+                if sunk_var in unit_clauses:
+                    # Add all cells this sunk ship covers
+                    if sunk_type == 10:
+                        covered.update([(sr, sc), (sr, sc + 1)])
+                    elif sunk_type == 11:
+                        covered.update([(sr, sc), (sr + 1, sc)])
+                    elif sunk_type == 12:
+                        covered.update([(sr, sc), (sr, sc + 1), (sr, sc + 2)])
+                    elif sunk_type == 13:
+                        covered.update([(sr, sc), (sr + 1, sc), (sr + 2, sc)])
+                    elif sunk_type == 16:
+                        covered.update([(sr, sc + k) for k in range(4)])
+                    elif sunk_type == 17:
+                        covered.update([(sr + k, sc) for k in range(4)])
+                    elif sunk_type == 19:
+                        covered.update([(sr + dr, sc + dc) for dr in range(2) for dc in range(2)])
+    return covered
+
+
+def _is_cell_in_sunk_ship(board_size, cnf, r, c):
+    """Legacy wrapper — prefer _get_sunk_covered_cells for batch checks."""
+    return (r, c) in _get_sunk_covered_cells(board_size, cnf)
 
 
 def get_simple_hunt_targets(board_size, cnf, shots_taken):
@@ -128,38 +161,38 @@ def get_intelligent_hunt_targets(board_size, cnf, shots_taken):
     if not unprocessed_hits:
         return []
 
-    solver = Glucose3()
-    for clause in cnf.clauses:
-        solver.add_clause(clause)
+    with Glucose3() as solver:
+        for clause in cnf.clauses:
+            solver.add_clause(clause)
 
-    candidates = []
-    forced_targets = []
-    seen = set()
+        candidates = []
+        forced_targets = []
+        seen = set()
 
-    for (hr, hc) in unprocessed_hits:
-        # For Carrier (2x2) and others, check all 8 neighbors
-        neighbors = [
-            (hr + dr, hc + dc) 
-            for dr in [-1, 0, 1] for dc in [-1, 0, 1] 
-            if not (dr == 0 and dc == 0)
-        ]
-        
-        for nr, nc in neighbors:
-            if not (0 <= nr < board_size and 0 <= nc < board_size):
-                continue
-            if (nr, nc) in shots_taken or (nr, nc) in seen:
-                continue
+        for (hr, hc) in unprocessed_hits:
+            # For Carrier (2x2) and others, check all 8 neighbors
+            neighbors = [
+                (hr + dr, hc + dc) 
+                for dr in [-1, 0, 1] for dc in [-1, 0, 1] 
+                if not (dr == 0 and dc == 0)
+            ]
             
-            seen.add((nr, nc))
-            sp_var = get_var(board_size, 1, nr, nc)
-            
-            # Priority 1: Is this cell FORCED to be a ship part? (KB |= SP)
-            # Check if KB & ~SP is UNSAT
-            if not solver.solve(assumptions=[-sp_var]):
-                forced_targets.append((nr, nc))
-            # Priority 2: Is this cell CONSISTENT with being a ship part? (KB & SP is SAT)
-            elif solver.solve(assumptions=[sp_var]):
-                candidates.append((nr, nc))
+            for nr, nc in neighbors:
+                if not (0 <= nr < board_size and 0 <= nc < board_size):
+                    continue
+                if (nr, nc) in shots_taken or (nr, nc) in seen:
+                    continue
+                
+                seen.add((nr, nc))
+                sp_var = get_var(board_size, 1, nr, nc)
+                
+                # Priority 1: Is this cell FORCED to be a ship part? (KB |= SP)
+                # Check if KB & ~SP is UNSAT
+                if not solver.solve(assumptions=[-sp_var]):
+                    forced_targets.append((nr, nc))
+                # Priority 2: Is this cell CONSISTENT with being a ship part? (KB & SP is SAT)
+                elif solver.solve(assumptions=[sp_var]):
+                    candidates.append((nr, nc))
 
     return forced_targets if forced_targets else candidates
 
@@ -255,6 +288,11 @@ class BaseSimulateGame:
     def simulate(self):
         raise NotImplementedError("Subclasses must implement simulate()")
 
+    def _all_ships_sunk(self, all_ship_cells):
+        """Returns True if every ship cell has been hit."""
+        hit_cells = {(r, c) for r, c, was_hit in self.shot_history if was_hit}
+        return all_ship_cells.issubset(hit_cells)
+
     def finalize_game(self, all_ship_cells):
         final_hits = len([h for h in self.shot_history if h[2]])
         print(f"\n📊 Game ended: {final_hits}/{len(all_ship_cells)} ship cells found in {len(self.shot_history)} shots")
@@ -270,6 +308,9 @@ class SimulateSimpleGame(BaseSimulateGame):
                           if get_var(self.board_size, 1, r, c) in self._get_unit_clause_set(self.truth_board.cnf)}
         
         for shot_num in range(1, self.shots + 1):
+            if self._all_ships_sunk(all_ship_cells):
+                print(f"🎉 All ships sunk in {len(self.shot_history)} shots!")
+                break
             target, active = strategy.get_hunt_candidates(self.board_size, self.agent_board.cnf, self.shots_taken)
             if not active or target is None: break
             self.shots_taken.add(target)
@@ -287,6 +328,9 @@ class SimulateIntelligentGame(BaseSimulateGame):
                           if get_var(self.board_size, 1, r, c) in self._get_unit_clause_set(self.truth_board.cnf)}
         
         for shot_num in range(1, self.shots + 1):
+            if self._all_ships_sunk(all_ship_cells):
+                print(f"🎉 All ships sunk in {len(self.shot_history)} shots!")
+                break
             target, active = strategy.get_hunt_candidates(self.board_size, self.agent_board.cnf, self.shots_taken)
             if not active or target is None: break
             self.shots_taken.add(target)
@@ -304,6 +348,9 @@ class SimulateCheckerboardIntelligentGame(BaseSimulateGame):
                           if get_var(self.board_size, 1, r, c) in self._get_unit_clause_set(self.truth_board.cnf)}
         
         for shot_num in range(1, self.shots + 1):
+            if self._all_ships_sunk(all_ship_cells):
+                print(f"🎉 All ships sunk in {len(self.shot_history)} shots!")
+                break
             target, active = strategy.get_hunt_candidates(self.board_size, self.agent_board.cnf, self.shots_taken)
             if not active or target is None: break
             self.shots_taken.add(target)
