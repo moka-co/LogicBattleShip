@@ -415,11 +415,9 @@ def simulate_game_intelligent(board_size, shots, truth_board, agent_board, use_g
 
     Behavior:
       - Default mode: pick a random unshot cell.
-      - After a hit, switch to "intelligent hunting" mode that:
-        * Tracks which ships have been sunk (patrol boat vs submarine)
-        * Analyzes hit patterns to determine likely ship orientation
-        * Prioritizes shots based on remaining ship types and lengths
-        * Uses directional shooting along likely ship axes
+      - After a hit, switch to "intelligent hunting" mode and keep shooting from
+        intelligent candidates until no more candidates exist or all ships are sunk.
+      - Only revert to random shooting when no hunt targets are available.
       - Game ends early if all ships are sunk.
     """
     # Visualize board before shots
@@ -428,6 +426,7 @@ def simulate_game_intelligent(board_size, shots, truth_board, agent_board, use_g
 
     shots_taken = set()
     shot_history = []
+    hunt_candidates = []  # Persistent list of intelligent hunting candidates
     
     # Get all ship positions from truth board for win condition check
     truth_unit_clauses = _get_unit_clause_set(truth_board.cnf)
@@ -448,15 +447,27 @@ def simulate_game_intelligent(board_size, shots, truth_board, agent_board, use_g
             print(f"\n🎉 VICTORY! All ships sunk in {len(shot_history)} shots!")
             break
 
-        # Try intelligent hunting first if there are unprocessed hits
-        unprocessed_hits = _get_unprocessed_hits(board_size, agent_board.cnf) 
+        # Update hunt candidates based on current unprocessed hits
+        unprocessed_hits = _get_unprocessed_hits(board_size, agent_board.cnf)
         if unprocessed_hits:
-            candidates = get_intelligent_hunt_targets(board_size, agent_board.cnf, shots_taken)
-            if candidates:
-                target = random.choice(candidates)  # Randomly select from intelligent candidates
-                print(f"Shot {shot_num}: Intelligent hunting target: {target} (hunting around unprocessed hits: {unprocessed_hits})")
+            # Get fresh intelligent candidates and merge with existing ones
+            new_candidates = get_intelligent_hunt_targets(board_size, agent_board.cnf, shots_taken)
+            # Remove already shot candidates and add new ones
+            hunt_candidates = [c for c in hunt_candidates if c not in shots_taken]
+            for candidate in new_candidates:
+                if candidate not in hunt_candidates and candidate not in shots_taken:
+                    hunt_candidates.append(candidate)
+        else:
+            # No unprocessed hits, clear hunt candidates
+            hunt_candidates = []
 
-        # Fallback to random if no hunting target was found.
+        # Try intelligent hunting first if we have hunt candidates
+        if hunt_candidates:
+            target = random.choice(hunt_candidates)
+            hunt_candidates.remove(target)  # Remove from candidates after selection
+            print(f"Shot {shot_num}: Intelligent hunting target: {target} (from candidates, {len(hunt_candidates)} remaining)")
+
+        # Fallback to random if no hunting target was found
         if not target:
             unshot = [(r, c) for r in range(board_size) for c in range(board_size)
                       if (r, c) not in shots_taken]
@@ -465,7 +476,7 @@ def simulate_game_intelligent(board_size, shots, truth_board, agent_board, use_g
                 break
             target = random.choice(unshot)
             if unprocessed_hits:
-                print(f"Shot {shot_num}: Random target: {target} (no valid hunt targets found, but unprocessed hits remain: {unprocessed_hits})")
+                print(f"Shot {shot_num}: Random target: {target} (no hunt candidates available, but unprocessed hits remain: {unprocessed_hits})")
             else:
                 print(f"Shot {shot_num}: Random target: {target}")
 
@@ -510,11 +521,9 @@ def simulate_game(board_size, shots, truth_board, agent_board, use_gui=False):
 
     Behavior:
       - Default mode: pick a random unshot cell.
-      - After a hit, switch to "hunting" mode and use `get_hunt_targets` to find
-        the next shot. If the SAT solver returns no candidates, fall back to random.
-      - Once the ship covering the most recent hit is sunk (detected by the
-        AllPartsSunk consequences propagating in the CNF, i.e. a Sunk variable
-        becomes asserted), revert to random shooting.
+      - After a hit, switch to "hunting" mode and keep shooting from hunt candidates
+        until no more candidates exist or all ships are sunk.
+      - Only revert to random shooting when no hunt targets are available.
       - Game ends early if all ships are sunk.
     """
     # Visualize board before shots
@@ -523,6 +532,7 @@ def simulate_game(board_size, shots, truth_board, agent_board, use_gui=False):
 
     shots_taken = set()
     shot_history = []
+    hunt_candidates = []  # Persistent list of hunting candidates
     
     # Get all ship positions from truth board for win condition check
     truth_unit_clauses = _get_unit_clause_set(truth_board.cnf)
@@ -543,15 +553,27 @@ def simulate_game(board_size, shots, truth_board, agent_board, use_gui=False):
             print(f"\n🎉 VICTORY! All ships sunk in {len(shot_history)} shots!")
             break
 
-        # Try hunting first if there are unprocessed hits (i.e., hits not yet sunk).
+        # Update hunt candidates based on current unprocessed hits
         unprocessed_hits = _get_unprocessed_hits(board_size, agent_board.cnf)
         if unprocessed_hits:
-            candidates = get_simple_hunt_targets(board_size, agent_board.cnf, shots_taken)
-            if candidates:
-                target = random.choice(candidates)  # Randomly pick from available neighbors
-                print(f"Shot {shot_num}: Hunting target: {target} (hunting around unprocessed hits: {unprocessed_hits})")
+            # Get fresh candidates and merge with existing ones
+            new_candidates = get_simple_hunt_targets(board_size, agent_board.cnf, shots_taken)
+            # Remove already shot candidates and add new ones
+            hunt_candidates = [c for c in hunt_candidates if c not in shots_taken]
+            for candidate in new_candidates:
+                if candidate not in hunt_candidates and candidate not in shots_taken:
+                    hunt_candidates.append(candidate)
+        else:
+            # No unprocessed hits, clear hunt candidates
+            hunt_candidates = []
 
-        # Fallback to random if no hunting target was found.
+        # Try hunting first if we have hunt candidates
+        if hunt_candidates:
+            target = random.choice(hunt_candidates)
+            hunt_candidates.remove(target)  # Remove from candidates after selection
+            print(f"Shot {shot_num}: Hunting target: {target} (from candidates, {len(hunt_candidates)} remaining)")
+
+        # Fallback to random if no hunting target was found
         if not target:
             unshot = [(r, c) for r in range(board_size) for c in range(board_size)
                       if (r, c) not in shots_taken]
@@ -560,7 +582,7 @@ def simulate_game(board_size, shots, truth_board, agent_board, use_gui=False):
                 break
             target = random.choice(unshot)
             if unprocessed_hits:
-                print(f"Shot {shot_num}: Random target: {target} (no valid hunt targets found, but unprocessed hits remain: {unprocessed_hits})")
+                print(f"Shot {shot_num}: Random target: {target} (no hunt candidates available, but unprocessed hits remain: {unprocessed_hits})")
             else:
                 print(f"Shot {shot_num}: Random target: {target}")
 
