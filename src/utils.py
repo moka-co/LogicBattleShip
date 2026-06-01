@@ -16,6 +16,10 @@
 # 11 = sunk patrol boat vertical   (Sunk_PB_{v,i,j})
 # 12 = sunk submarine horizontal   (Sunk_SM_{h,i,j})
 # 13 = sunk submarine vertical     (Sunk_SM_{v,i,j})
+# 14 = battleship horizontal placement (BS_{h,i,j})
+# 15 = battleship vertical placement (BS_{v,i,j})
+# 16 = sunk battleship horizontal (Sunk_BS_{h,i,j})
+# 17 = sunk battleship vertical   (Sunk_BS_{v,i,j})
 def get_var(board_size, v_type, r, c):
     return v_type * (board_size * board_size) + r * board_size + c + 1
 

@@ -55,20 +55,28 @@ def _sunk_covers_cell(board_size, sunk_type, sr, sc, r, c):
         return r == sr and (c == sc or c == sc + 1 or c == sc + 2)
     if sunk_type == 13:
         return c == sc and (r == sr or r == sr + 1 or r == sr + 2)
+    if sunk_type == 16:
+        return r == sr and sc <= c <= sc + 3
+    if sunk_type == 17:
+        return c == sc and sr <= r <= sr + 3
     return False
 
 
 def _is_cell_in_sunk_ship(board_size, cnf, r, c):
     unit_clauses = _get_unit_clause_set(cnf)
-    for sunk_type in (10, 11, 12, 13):
+    for sunk_type in (10, 11, 12, 13, 16, 17):
         if sunk_type == 10:
             r_range, c_range = range(board_size), range(board_size - 1)
         elif sunk_type == 11:
             r_range, c_range = range(board_size - 1), range(board_size)
         elif sunk_type == 12:
             r_range, c_range = range(board_size), range(board_size - 2)
-        else:
+        elif sunk_type == 13:
             r_range, c_range = range(board_size - 2), range(board_size)
+        elif sunk_type == 16:
+            r_range, c_range = range(board_size), range(board_size - 3)
+        else:
+            r_range, c_range = range(board_size - 3), range(board_size)
         for sr in r_range:
             for sc in c_range:
                 sunk_var = get_var(board_size, sunk_type, sr, sc)
@@ -101,7 +109,9 @@ def _get_sunk_ships_status(board_size, cnf):
                        any(get_var(board_size, 11, r, c) in unit_clauses for r in range(board_size - 1) for c in range(board_size))
     submarine_sunk = any(get_var(board_size, 12, r, c) in unit_clauses for r in range(board_size) for c in range(board_size - 2)) or \
                      any(get_var(board_size, 13, r, c) in unit_clauses for r in range(board_size - 2) for c in range(board_size))
-    return {'patrol_boat': patrol_boat_sunk, 'submarine': submarine_sunk}
+    battleship_sunk = any(get_var(board_size, 16, r, c) in unit_clauses for r in range(board_size) for c in range(board_size - 3)) or \
+                      any(get_var(board_size, 17, r, c) in unit_clauses for r in range(board_size - 3) for c in range(board_size))
+    return {'patrol_boat': patrol_boat_sunk, 'submarine': submarine_sunk, 'battleship': battleship_sunk}
 
 
 def get_intelligent_hunt_targets(board_size, cnf, shots_taken):

@@ -302,6 +302,80 @@ def add_submarine_non_adjacent_constraints(board_size, cnf):
     return cnf
 
 
+# Battleship
+def add_battleship_to_board(board_size, cnf, occupied=None):
+    """Adds exactly one battleship to the board by choosing a random valid placement."""
+    if occupied is None:
+        occupied = set()
+
+    valid_placements = []
+    for r in range(board_size):
+        for c in range(board_size - 3):
+            cells = _get_ship_cells('h', r, c, 4)
+            if not any(cell in occupied for cell in cells):
+                valid_placements.append(('h', r, c, cells))
+    for r in range(board_size - 3):
+        for c in range(board_size):
+            cells = _get_ship_cells('v', r, c, 4)
+            if not any(cell in occupied for cell in cells):
+                valid_placements.append(('v', r, c, cells))
+
+    if not valid_placements:
+        raise RuntimeError("No valid placement for battleship")
+
+    orientation, r, c, cells = random.choice(valid_placements)
+
+    if orientation == 'h':
+        bs_var = get_var(board_size, 14, r, c)
+    else:
+        bs_var = get_var(board_size, 15, r, c)
+    cnf.append([bs_var])
+
+    for (cr, cc) in cells:
+        cnf.append([get_var(board_size, 1, cr, cc)])
+
+    return occupied | _get_forbidden_cells(board_size, cells)
+
+
+def add_battleship_constraints(board_size, cnf):
+    all_placements = []
+    for r in range(board_size):
+        for c in range(board_size):
+            if c < board_size - 3:
+                var_h = get_var(board_size, 14, r, c)
+                all_placements.append(var_h)
+                for k in range(4):
+                    cnf.append([-var_h, get_var(board_size, 1, r, c + k)])
+            if r < board_size - 3:
+                var_v = get_var(board_size, 15, r, c)
+                all_placements.append(var_v)
+                for k in range(4):
+                    cnf.append([-var_v, get_var(board_size, 1, r + k, c)])
+    cnf.append(list(all_placements))
+    for i in range(len(all_placements)):
+        for j in range(i + 1, len(all_placements)):
+            cnf.append([-all_placements[i], -all_placements[j]])
+    return cnf
+
+
+def add_battleship_non_adjacent_constraints(board_size, cnf):
+    for r in range(board_size):
+        for c in range(board_size - 3):
+            bs_h = get_var(board_size, 14, r, c)
+            cells = _get_ship_cells('h', r, c, 4)
+            for nr, nc in _get_forbidden_cells(board_size, cells):
+                if (nr, nc) not in cells:
+                    cnf.append([-bs_h, -get_var(board_size, 1, nr, nc)])
+    for r in range(board_size - 3):
+        for c in range(board_size):
+            bs_v = get_var(board_size, 15, r, c)
+            cells = _get_ship_cells('v', r, c, 4)
+            for nr, nc in _get_forbidden_cells(board_size, cells):
+                if (nr, nc) not in cells:
+                    cnf.append([-bs_v, -get_var(board_size, 1, nr, nc)])
+    return cnf
+
+
 class PatrolBoatFactory:
     def __init__(self, board_size):
         self.board_size = board_size
@@ -325,5 +399,18 @@ class SubmarineFactory:
         occupied = add_submarine_to_board(self.board_size, cnf, occupied)
         add_submarine_constraints(self.board_size, cnf)
         add_submarine_non_adjacent_constraints(self.board_size, cnf)
+        return occupied
+
+
+class BattleshipFactory:
+    def __init__(self, board_size):
+        self.board_size = board_size
+
+    def build(self, cnf, occupied=None):
+        if occupied is None:
+            occupied = set()
+        occupied = add_battleship_to_board(self.board_size, cnf, occupied)
+        add_battleship_constraints(self.board_size, cnf)
+        add_battleship_non_adjacent_constraints(self.board_size, cnf)
         return occupied
 

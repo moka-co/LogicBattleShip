@@ -218,6 +218,24 @@ def add_sinking_constraints(board_size, cnf):
             cnf.append([-sunk, h3])
             cnf.append([-h1, -h2, -h3, sunk])
 
+    # --- Sunk Battleship horizontal: Sunk_BS_{h,i,j} <=> (Hit_{i,j} ∧ Hit_{i,j+1} ∧ Hit_{i,j+2} ∧ Hit_{i,j+3}) ---
+    for r in range(board_size):
+        for c in range(board_size - 3):
+            sunk = get_var(board_size, 16, r, c)
+            hits = [get_var(board_size, 8, r, c + k) for k in range(4)]
+            for h in hits:
+                cnf.append([-sunk, h])
+            cnf.append([-h for h in hits] + [sunk])
+
+    # --- Sunk Battleship vertical: Sunk_BS_{v,i,j} <=> (Hit_{i,j} ∧ Hit_{i+1,j} ∧ Hit_{i+2,j} ∧ Hit_{i+3,j}) ---
+    for r in range(board_size - 3):
+        for c in range(board_size):
+            sunk = get_var(board_size, 17, r, c)
+            hits = [get_var(board_size, 8, r + k, c) for k in range(4)]
+            for h in hits:
+                cnf.append([-sunk, h])
+            cnf.append([-h for h in hits] + [sunk])
+
     return cnf
 
 
@@ -307,6 +325,22 @@ def add_all_parts_sunk_consequences(board_size, cnf):
                 (r + 1, c + 1),  # right of second part
                 (r + 2, c + 1),  # right of third part
             ]
+            _add_neg_sp(sunk, neighbors)
+
+    # --- Sunk BS horizontal: Sunk_BS_{h,i,j} -> 10 surrounding cells are not SP ---
+    for r in range(board_size):
+        for c in range(board_size - 3):
+            sunk = get_var(board_size, 16, r, c)
+            cells = _get_ship_cells('h', r, c, 4)
+            neighbors = [n for n in _get_forbidden_cells(board_size, cells) if n not in cells]
+            _add_neg_sp(sunk, neighbors)
+
+    # --- Sunk BS vertical: Sunk_BS_{v,i,j} -> 10 surrounding cells are not SP ---
+    for r in range(board_size - 3):
+        for c in range(board_size):
+            sunk = get_var(board_size, 17, r, c)
+            cells = _get_ship_cells('v', r, c, 4)
+            neighbors = [n for n in _get_forbidden_cells(board_size, cells) if n not in cells]
             _add_neg_sp(sunk, neighbors)
 
     return cnf
