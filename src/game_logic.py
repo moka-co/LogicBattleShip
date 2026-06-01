@@ -170,7 +170,8 @@ def get_intelligent_hunt_targets(board_size, cnf, shots_taken):
         seen = set()
 
         for (hr, hc) in unprocessed_hits:
-            # For Carrier (2x2) and others, check all 8 neighbors
+            # Check all 8 neighbors (orthogonal + diagonal) because the Carrier
+            # is 2x2, so diagonal cells can be part of the same ship.
             neighbors = [
                 (hr + dr, hc + dc) 
                 for dr in [-1, 0, 1] for dc in [-1, 0, 1] 
