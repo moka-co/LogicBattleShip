@@ -636,8 +636,8 @@ class SimulateSimpleGame:
 
     def __init__(self, board_size, shots, truth_board, agent_board, use_gui=False):
         self.board_size = board_size
-        self.truth_board = agent_board
-        self.agent_board = truth_board
+        self.truth_board = truth_board
+        self.agent_board = agent_board
 
         self.shots_taken = set()
         self.shot_history = []
@@ -650,6 +650,29 @@ class SimulateSimpleGame:
     def _get_unit_clause_set(self, cnf):
         """Returns the set of asserted literals (unit clauses) in the CNF."""
         return {clause[0] for clause in cnf.clauses if len(clause) == 1}
+    
+    def _get_unprocessed_hits(self, cnf):
+        """Returns a list of (r,c) for all Hit cells that are NOT yet covered by a Sunk variable.
+        
+        Simple logic: a hit is unprocessed if the cell has been hit but is not covered 
+        by any asserted Sunk variable (meaning the ship is not fully sunk yet).
+        """
+        unit_clauses = self._get_unit_clause_set(cnf)
+        unprocessed_hits = []
+        
+        for r in range(self.board_size):
+            for c in range(self.board_size):
+                hit_var = get_var(self.board_size, 8, r, c)
+                
+                # Check if this cell has been hit
+                if hit_var not in unit_clauses:
+                    continue
+                    
+                # Check if this hit is covered by any sunk ship using the existing helper
+                if not _is_cell_in_sunk_ship(self.board_size, cnf, r, c):
+                    unprocessed_hits.append((r, c))
+        
+        return unprocessed_hits
 
     def _simulate_game(self, shots, use_gui=False):
 
@@ -673,11 +696,11 @@ class SimulateSimpleGame:
                          if get_var(self.board_size, 8, r, c) in agent_unit_clauses}
             
             if all_ship_cells.issubset(hit_cells):
-                print(f"\n🎉 VICTORY! All ships sunk in {len(self.shot_history)} shots!")
+                print(f"\nVICTORY! All ships sunk in {len(self.shot_history)} shots!")
                 break
 
             # Update hunt candidates based on current unprocessed hits
-            unprocessed_hits = _get_unprocessed_hits(self.board_size, self.agent_board.cnf)
+            unprocessed_hits = self._get_unprocessed_hits(self.agent_board.cnf)
             if unprocessed_hits:
                 # Get fresh candidates and merge with existing ones
                 new_candidates = get_simple_hunt_targets(self.board_size, self.agent_board.cnf, self.shots_taken)
@@ -716,7 +739,7 @@ class SimulateSimpleGame:
             record_shot(self.board_size, self.agent_board.cnf, r, c, was_hit)
             self.shot_history.append((r, c, was_hit))
             
-            hit_status = "HIT! 🎯" if was_hit else "Miss"
+            hit_status = "HIT!" if was_hit else "Miss"
             print(f"  Result: ({r}, {c}) - {hit_status}")
             
             # Show progress
@@ -726,9 +749,9 @@ class SimulateSimpleGame:
         # Final status
         final_hits = len([h for h in self.shot_history if h[2]])
         if final_hits == len(all_ship_cells):
-            print(f"\n🏆 GAME WON! All {len(all_ship_cells)} ship cells destroyed in {len(self.shot_history)} shots!")
+            print(f"\nGAME WON! All {len(all_ship_cells)} ship cells destroyed in {len(self.shot_history)} shots!")
         else:
-            print(f"\n📊 Game ended: {final_hits}/{len(all_ship_cells)} ship cells found in {len(self.shot_history)} shots")
+            print(f"\nGame ended: {final_hits}/{len(all_ship_cells)} ship cells found in {len(self.shot_history)} shots")
 
         # Visualize board after shots
         print("\n" + "="*50)
