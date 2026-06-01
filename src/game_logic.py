@@ -160,18 +160,14 @@ def _is_cell_in_sunk_ship(board_size, cnf, r, c):
     return False
 
 
-def _get_open_hits(board_size, cnf):
+def _get_unprocessed_hits(board_size, cnf):
     """Returns a list of (r,c) for all Hit cells that are NOT yet covered by a Sunk variable.
     
-    A hit is considered "open" if:
-    1. The cell has been hit (Hit_{r,c} is asserted)
-    2. The cell is not covered by any asserted Sunk variable
-    
-    This correctly handles the case where multiple ships are partially hit - 
-    only the hits belonging to fully sunk ships are removed from the open hits list.
+    Simple logic: a hit is unprocessed if the cell has been hit but is not covered 
+    by any asserted Sunk variable (meaning the ship is not fully sunk yet).
     """
     unit_clauses = _get_unit_clause_set(cnf)
-    open_hits = []
+    unprocessed_hits = []
     
     for r in range(board_size):
         for c in range(board_size):
@@ -181,98 +177,43 @@ def _get_open_hits(board_size, cnf):
             if hit_var not in unit_clauses:
                 continue
                 
-            # Check if this hit is covered by any sunk ship
-            is_covered = False
-            
-            # Check all possible sunk ship variables that could cover this cell
-            for sunk_type in [10, 11, 12, 13]:  # All sunk ship types
-                if sunk_type == 10:  # Sunk PB horizontal
-                    # PB_h at (sr,sc) covers (sr,sc) and (sr,sc+1)
-                    # So (r,c) could be covered by PB_h at (r,c) or (r,c-1)
-                    possible_origins = [(r, c), (r, c-1)]
-                    valid_range = lambda sr, sc: 0 <= sr < board_size and 0 <= sc <= board_size - 2
-                elif sunk_type == 11:  # Sunk PB vertical  
-                    # PB_v at (sr,sc) covers (sr,sc) and (sr+1,sc)
-                    # So (r,c) could be covered by PB_v at (r,c) or (r-1,c)
-                    possible_origins = [(r, c), (r-1, c)]
-                    valid_range = lambda sr, sc: 0 <= sr <= board_size - 2 and 0 <= sc < board_size
-                elif sunk_type == 12:  # Sunk SM horizontal
-                    # SM_h at (sr,sc) covers (sr,sc), (sr,sc+1), (sr,sc+2)  
-                    # So (r,c) could be covered by SM_h at (r,c), (r,c-1), or (r,c-2)
-                    possible_origins = [(r, c), (r, c-1), (r, c-2)]
-                    valid_range = lambda sr, sc: 0 <= sr < board_size and 0 <= sc <= board_size - 3
-                else:  # sunk_type == 13, Sunk SM vertical
-                    # SM_v at (sr,sc) covers (sr,sc), (sr+1,sc), (sr+2,sc)
-                    # So (r,c) could be covered by SM_v at (r,c), (r-1,c), or (r-2,c)  
-                    possible_origins = [(r, c), (r-1, c), (r-2, c)]
-                    valid_range = lambda sr, sc: 0 <= sr <= board_size - 3 and 0 <= sc < board_size
-                
-                # Check if any of these sunk variables are asserted
-                for (sr, sc) in possible_origins:
-                    if valid_range(sr, sc):
-                        sunk_var = get_var(board_size, sunk_type, sr, sc)
-                        if sunk_var in unit_clauses:
-                            is_covered = True
-                            break
-                
-                if is_covered:
-                    break
-            
-            # If the hit is not covered by any sunk ship, it's an open hit
-            if not is_covered:
-                open_hits.append((r, c))
+            # Check if this hit is covered by any sunk ship using the existing helper
+            if not _is_cell_in_sunk_ship(board_size, cnf, r, c):
+                unprocessed_hits.append((r, c))
     
-    return open_hits
+    return unprocessed_hits
 
 
-def get_hunt_targets(board_size, cnf, shots_taken):
-    """Returns a list of candidate (r,c) cells to shoot, prioritized for hunting.
+def get_simple_hunt_targets(board_size, cnf, shots_taken):
+    """Returns a list of candidate (r,c) cells to shoot using simple neighbor enumeration.
 
-    Algorithm:
-      1. Find all "open hits": cells where Hit is asserted but no Sunk variable
-         covering the cell has been asserted yet.
-      2. For each open hit, enumerate the 4 orthogonal neighbors (N, S, E, W).
-      3. For each unshot in-bounds neighbor, query Glucose3 with assumptions:
-         - First, check if SP_{nr,nc} is FORCED (i.e. KB ∧ ¬SP_{nr,nc} is UNSAT).
-           If so, return that cell immediately as the highest-priority target.
-         - Otherwise, check if SP_{nr,nc} is POSSIBLE (i.e. KB ∧ SP_{nr,nc} is SAT).
-           If so, add it to the candidate list.
-      4. Returns either a single forced cell, the list of possible candidates, or
-         an empty list if no logical hunting targets are available.
+    Simple Algorithm:
+      1. Find all unprocessed hits (hits not covered by sunk ships)
+      2. For each unprocessed hit, get its 4 orthogonal neighbors (N, S, E, W)
+      3. Return all unshot, in-bounds neighbors as candidates
+      4. No SAT solver queries - just simple neighbor enumeration
     """
-    open_hits = _get_open_hits(board_size, cnf)
-    if not open_hits:
+    unprocessed_hits = _get_unprocessed_hits(board_size, cnf)
+    if not unprocessed_hits:
         return []
 
     candidates = []
     seen = set()
 
-    for (hr, hc) in open_hits:
+    for (hr, hc) in unprocessed_hits:
         neighbors = [(hr - 1, hc), (hr + 1, hc), (hr, hc - 1), (hr, hc + 1)]
         for (nr, nc) in neighbors:
+            # Check bounds
             if not (0 <= nr < board_size and 0 <= nc < board_size):
                 continue
+            # Skip if already shot or already added to candidates
             if (nr, nc) in shots_taken or (nr, nc) in seen:
                 continue
+            
             seen.add((nr, nc))
+            candidates.append((nr, nc))
 
-            sp_var = get_var(board_size, 1, nr, nc)
-
-            # Priority 1: Is SP_{nr,nc} FORCED? Check if KB ∧ ¬SP is UNSAT.
-            with Glucose3(bootstrap_with=cnf.clauses) as solver:
-                if not solver.solve(assumptions=[-sp_var]):
-                    # Forced ship part: must shoot here.
-                    print(f"  Found FORCED target at ({nr}, {nc}) for open hit ({hr}, {hc})")
-                    return [(nr, nc)]
-
-            # Priority 2: Is SP_{nr,nc} POSSIBLE? Check if KB ∧ SP is SAT.
-            with Glucose3(bootstrap_with=cnf.clauses) as solver:
-                if solver.solve(assumptions=[sp_var]):
-                    candidates.append((nr, nc))
-                    print(f"  Found POSSIBLE target at ({nr}, {nc}) for open hit ({hr}, {hc})")
-            # If neither forced nor possible, it's impossible (¬SP entailed); skip.
-
-    print(f"  Hunt targets for open hits {open_hits}: {candidates}")
+    print(f"  Simple hunt targets for unprocessed hits {unprocessed_hits}: {candidates}")
     return candidates
 
 
@@ -314,13 +255,13 @@ def simulate_game(board_size, shots, truth_board, agent_board, use_gui=False):
             print(f"\n🎉 VICTORY! All ships sunk in {len(shot_history)} shots!")
             break
 
-        # Try hunting first if there are open hits (i.e., hits not yet sunk).
-        open_hits = _get_open_hits(board_size, agent_board.cnf) # Use agent board 
-        if open_hits:
-            candidates = get_hunt_targets(board_size, agent_board.cnf, shots_taken)
+        # Try hunting first if there are unprocessed hits (i.e., hits not yet sunk).
+        unprocessed_hits = _get_unprocessed_hits(board_size, agent_board.cnf)
+        if unprocessed_hits:
+            candidates = get_simple_hunt_targets(board_size, agent_board.cnf, shots_taken)
             if candidates:
-                target = candidates[0]
-                print(f"Shot {shot_num}: Hunting target: {target} (continuing hunt for open hits: {open_hits})")
+                target = random.choice(candidates)  # Randomly pick from available neighbors
+                print(f"Shot {shot_num}: Hunting target: {target} (hunting around unprocessed hits: {unprocessed_hits})")
 
         # Fallback to random if no hunting target was found.
         if not target:
@@ -330,8 +271,8 @@ def simulate_game(board_size, shots, truth_board, agent_board, use_gui=False):
                 print("All cells have been shot.")
                 break
             target = random.choice(unshot)
-            if open_hits:
-                print(f"Shot {shot_num}: Random target: {target} (no valid hunt targets found, but open hits remain: {open_hits})")
+            if unprocessed_hits:
+                print(f"Shot {shot_num}: Random target: {target} (no valid hunt targets found, but unprocessed hits remain: {unprocessed_hits})")
             else:
                 print(f"Shot {shot_num}: Random target: {target}")
 
