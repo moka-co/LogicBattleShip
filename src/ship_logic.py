@@ -156,94 +156,124 @@ def add_shot_hit_miss_constraints(board_size, cnf):
 def add_sinking_constraints(board_size, cnf):
     """Adds the Sinking Ships biconditional constraints.
 
-    A ship is "sunk" iff all of its parts have been Hit. We encode the biconditional
-    Sunk_X_{o,i,j} <=> (Hit_{cell_1} AND Hit_{cell_2} AND ... AND Hit_{cell_n})
-    for each ship type X (PatrolBoat, Submarine), orientation o (h, v), and starting
-    position (i,j) where the ship fits on the board.
+    A ship is "sunk" iff it was placed at that position AND all of its parts have
+    been Hit. We encode the biconditional:
+    Sunk_X_{o,i,j} <=> (Placement_X_{o,i,j} AND Hit_{cell_1} AND ... AND Hit_{cell_n})
 
-    The biconditional A <=> (B1 AND B2 AND ... AND Bn) decomposes into CNF as:
+    Conditioning on the placement variable is critical: without it, hitting 2 adjacent
+    cells of a Submarine would falsely trigger Sunk_PB, causing the agent to stop
+    hunting near those cells before the Submarine is fully destroyed.
+
+    The biconditional A <=> (B0 AND B1 AND ... AND Bn) decomposes into CNF as:
       - A -> Bk            (for each k): [-A, Bk]
-      - (B1 ∧ ... ∧ Bn) -> A : [-B1, -B2, ..., -Bn, A]
+      - (B0 ∧ B1 ∧ ... ∧ Bn) -> A : [-B0, -B1, ..., -Bn, A]
 
     Variable types used:
+      - Type 3  = PB_{h,i,j}  (patrol boat horizontal placement)
+      - Type 4  = PB_{v,i,j}  (patrol boat vertical placement)
+      - Type 5  = SM_{h,i,j}  (submarine horizontal placement)
+      - Type 6  = SM_{v,i,j}  (submarine vertical placement)
+      - Type 14 = BS_{h,i,j}  (battleship horizontal placement)
+      - Type 15 = BS_{v,i,j}  (battleship vertical placement)
+      - Type 18 = CR_{i,j}    (carrier placement)
       - Type 10 = Sunk_PB_{h,i,j}
       - Type 11 = Sunk_PB_{v,i,j}
       - Type 12 = Sunk_SM_{h,i,j}
       - Type 13 = Sunk_SM_{v,i,j}
+      - Type 16 = Sunk_BS_{h,i,j}
+      - Type 17 = Sunk_BS_{v,i,j}
+      - Type 19 = Sunk_CR_{i,j}
     """
 
-    # --- Sunk PatrolBoat horizontal: Sunk_PB_{h,i,j} <=> (Hit_{i,j} ∧ Hit_{i,j+1}) ---
+    # --- Sunk PatrolBoat horizontal: Sunk_PB_{h,i,j} <=> (PB_{h,i,j} ∧ Hit_{i,j} ∧ Hit_{i,j+1}) ---
+    # Conditioned on the placement variable so that 2 adjacent hits on a longer ship
+    # don't falsely trigger a PatrolBoat sunk.
     for r in range(board_size):
         for c in range(board_size - 1):  # needs c+1 in bounds
             sunk = get_var(board_size, 10, r, c)
+            pb = get_var(board_size, 3, r, c)
             h1 = get_var(board_size, 8, r, c)
             h2 = get_var(board_size, 8, r, c + 1)
+            # Sunk -> PB_{h,i,j}
+            cnf.append([-sunk, pb])
             # Sunk -> Hit_k
             cnf.append([-sunk, h1])
             cnf.append([-sunk, h2])
-            # (Hit_1 ∧ Hit_2) -> Sunk
-            cnf.append([-h1, -h2, sunk])
+            # (PB_{h,i,j} ∧ Hit_1 ∧ Hit_2) -> Sunk
+            cnf.append([-pb, -h1, -h2, sunk])
 
-    # --- Sunk PatrolBoat vertical: Sunk_PB_{v,i,j} <=> (Hit_{i,j} ∧ Hit_{i+1,j}) ---
+    # --- Sunk PatrolBoat vertical: Sunk_PB_{v,i,j} <=> (PB_{v,i,j} ∧ Hit_{i,j} ∧ Hit_{i+1,j}) ---
     for r in range(board_size - 1):  # needs r+1 in bounds
         for c in range(board_size):
             sunk = get_var(board_size, 11, r, c)
+            pb = get_var(board_size, 4, r, c)
             h1 = get_var(board_size, 8, r, c)
             h2 = get_var(board_size, 8, r + 1, c)
+            cnf.append([-sunk, pb])
             cnf.append([-sunk, h1])
             cnf.append([-sunk, h2])
-            cnf.append([-h1, -h2, sunk])
+            cnf.append([-pb, -h1, -h2, sunk])
 
-    # --- Sunk Submarine horizontal: Sunk_SM_{h,i,j} <=> (Hit_{i,j} ∧ Hit_{i,j+1} ∧ Hit_{i,j+2}) ---
+    # --- Sunk Submarine horizontal: Sunk_SM_{h,i,j} <=> (SM_{h,i,j} ∧ Hit_{i,j} ∧ Hit_{i,j+1} ∧ Hit_{i,j+2}) ---
     for r in range(board_size):
         for c in range(board_size - 2):  # needs c+2 in bounds
             sunk = get_var(board_size, 12, r, c)
+            sm = get_var(board_size, 5, r, c)
             h1 = get_var(board_size, 8, r, c)
             h2 = get_var(board_size, 8, r, c + 1)
             h3 = get_var(board_size, 8, r, c + 2)
+            cnf.append([-sunk, sm])
             cnf.append([-sunk, h1])
             cnf.append([-sunk, h2])
             cnf.append([-sunk, h3])
-            cnf.append([-h1, -h2, -h3, sunk])
+            cnf.append([-sm, -h1, -h2, -h3, sunk])
 
-    # --- Sunk Submarine vertical: Sunk_SM_{v,i,j} <=> (Hit_{i,j} ∧ Hit_{i+1,j} ∧ Hit_{i+2,j}) ---
+    # --- Sunk Submarine vertical: Sunk_SM_{v,i,j} <=> (SM_{v,i,j} ∧ Hit_{i,j} ∧ Hit_{i+1,j} ∧ Hit_{i+2,j}) ---
     for r in range(board_size - 2):  # needs r+2 in bounds
         for c in range(board_size):
             sunk = get_var(board_size, 13, r, c)
+            sm = get_var(board_size, 6, r, c)
             h1 = get_var(board_size, 8, r, c)
             h2 = get_var(board_size, 8, r + 1, c)
             h3 = get_var(board_size, 8, r + 2, c)
+            cnf.append([-sunk, sm])
             cnf.append([-sunk, h1])
             cnf.append([-sunk, h2])
             cnf.append([-sunk, h3])
-            cnf.append([-h1, -h2, -h3, sunk])
+            cnf.append([-sm, -h1, -h2, -h3, sunk])
 
-    # --- Sunk Battleship horizontal: Sunk_BS_{h,i,j} <=> (Hit_{i,j} ∧ Hit_{i,j+1} ∧ Hit_{i,j+2} ∧ Hit_{i,j+3}) ---
+    # --- Sunk Battleship horizontal: Sunk_BS_{h,i,j} <=> (BS_{h,i,j} ∧ Hit_{i,j} ∧ ... ∧ Hit_{i,j+3}) ---
     for r in range(board_size):
         for c in range(board_size - 3):
             sunk = get_var(board_size, 16, r, c)
+            bs = get_var(board_size, 14, r, c)
             hits = [get_var(board_size, 8, r, c + k) for k in range(4)]
+            cnf.append([-sunk, bs])
             for h in hits:
                 cnf.append([-sunk, h])
-            cnf.append([-h for h in hits] + [sunk])
+            cnf.append([-bs] + [-h for h in hits] + [sunk])
 
-    # --- Sunk Battleship vertical: Sunk_BS_{v,i,j} <=> (Hit_{i,j} ∧ Hit_{i+1,j} ∧ Hit_{i+2,j} ∧ Hit_{i+3,j}) ---
+    # --- Sunk Battleship vertical: Sunk_BS_{v,i,j} <=> (BS_{v,i,j} ∧ Hit_{i,j} ∧ ... ∧ Hit_{i+3,j}) ---
     for r in range(board_size - 3):
         for c in range(board_size):
             sunk = get_var(board_size, 17, r, c)
+            bs = get_var(board_size, 15, r, c)
             hits = [get_var(board_size, 8, r + k, c) for k in range(4)]
+            cnf.append([-sunk, bs])
             for h in hits:
                 cnf.append([-sunk, h])
-            cnf.append([-h for h in hits] + [sunk])
+            cnf.append([-bs] + [-h for h in hits] + [sunk])
 
-    # --- Sunk Carrier: Sunk_CR_{i,j} <=> (Hit_{i,j} ∧ Hit_{i,j+1} ∧ Hit_{i+1,j} ∧ Hit_{i+1,j+1}) ---
+    # --- Sunk Carrier: Sunk_CR_{i,j} <=> (CR_{i,j} ∧ Hit_{i,j} ∧ Hit_{i,j+1} ∧ Hit_{i+1,j} ∧ Hit_{i+1,j+1}) ---
     for r in range(board_size - 1):
         for c in range(board_size - 1):
             sunk = get_var(board_size, 19, r, c)
+            cr = get_var(board_size, 18, r, c)
             hits = [get_var(board_size, 8, r + dr, c + dc) for dr in range(2) for dc in range(2)]
+            cnf.append([-sunk, cr])
             for h in hits:
                 cnf.append([-sunk, h])
-            cnf.append([-h for h in hits] + [sunk])
+            cnf.append([-cr] + [-h for h in hits] + [sunk])
 
     return cnf
 
