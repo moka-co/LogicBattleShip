@@ -233,6 +233,7 @@ def simulate_game(board_size, shots, truth_board, agent_board, use_gui=False):
       - Once the ship covering the most recent hit is sunk (detected by the
         AllPartsSunk consequences propagating in the CNF, i.e. a Sunk variable
         becomes asserted), revert to random shooting.
+      - Game ends early if all ships are sunk.
     """
     # Visualize board before shots
     print("Board from the POV of the Truth")
@@ -240,9 +241,25 @@ def simulate_game(board_size, shots, truth_board, agent_board, use_gui=False):
 
     shots_taken = set()
     shot_history = []
+    
+    # Get all ship positions from truth board for win condition check
+    truth_unit_clauses = _get_unit_clause_set(truth_board.cnf)
+    all_ship_cells = {(r, c) for r in range(board_size) for c in range(board_size)
+                      if get_var(board_size, 1, r, c) in truth_unit_clauses}
+    
+    print(f"Total ship cells to find: {len(all_ship_cells)}")
 
-    for _ in range(shots):
+    for shot_num in range(1, shots + 1):
         target = None
+
+        # Check win condition - all ships sunk
+        agent_unit_clauses = _get_unit_clause_set(agent_board.cnf)
+        hit_cells = {(r, c) for r in range(board_size) for c in range(board_size)
+                     if get_var(board_size, 8, r, c) in agent_unit_clauses}
+        
+        if all_ship_cells.issubset(hit_cells):
+            print(f"\n🎉 VICTORY! All ships sunk in {len(shot_history)} shots!")
+            break
 
         # Try hunting first if there are open hits (i.e., hits not yet sunk).
         open_hits = _get_open_hits(board_size, agent_board.cnf) # Use agent board 
@@ -250,7 +267,7 @@ def simulate_game(board_size, shots, truth_board, agent_board, use_gui=False):
             candidates = get_hunt_targets(board_size, agent_board.cnf, shots_taken)
             if candidates:
                 target = candidates[0]
-                print(f"Hunting target: {target} (continuing hunt for open hits: {open_hits})")
+                print(f"Shot {shot_num}: Hunting target: {target} (continuing hunt for open hits: {open_hits})")
 
         # Fallback to random if no hunting target was found.
         if not target:
@@ -261,9 +278,9 @@ def simulate_game(board_size, shots, truth_board, agent_board, use_gui=False):
                 break
             target = random.choice(unshot)
             if open_hits:
-                print(f"Random target: {target} (no valid hunt targets found, but open hits remain: {open_hits})")
+                print(f"Shot {shot_num}: Random target: {target} (no valid hunt targets found, but open hits remain: {open_hits})")
             else:
-                print(f"Random target: {target}")
+                print(f"Shot {shot_num}: Random target: {target}")
 
         r, c = target
         shots_taken.add((r, c))
@@ -271,15 +288,31 @@ def simulate_game(board_size, shots, truth_board, agent_board, use_gui=False):
         was_hit = is_ship_part(board_size, truth_board.cnf, r, c)
         record_shot(board_size, agent_board.cnf, r, c, was_hit)
         shot_history.append((r, c, was_hit))
-        print(f"Shot at ({r}, {c}) - Hit: {was_hit}")
+        
+        hit_status = "HIT! 🎯" if was_hit else "Miss"
+        print(f"  Result: ({r}, {c}) - {hit_status}")
+        
+        # Show progress
+        current_hits = len([h for h in shot_history if h[2]])
+        print(f"  Progress: {current_hits}/{len(all_ship_cells)} ship cells found")
+
+    # Final status
+    final_hits = len([h for h in shot_history if h[2]])
+    if final_hits == len(all_ship_cells):
+        print(f"\n🏆 GAME WON! All {len(all_ship_cells)} ship cells destroyed in {len(shot_history)} shots!")
+    else:
+        print(f"\n📊 Game ended: {final_hits}/{len(all_ship_cells)} ship cells found in {len(shot_history)} shots")
 
     # Visualize board after shots
-    print("Truth board:")
+    print("\n" + "="*50)
+    print("FINAL BOARDS:")
+    print("="*50)
+    print("Truth board (actual ship positions):")
     visualize_board(board_size, truth_board.cnf)
-    print("Agent Board:")
+    print("\nAgent board (discovered information):")
     visualize_board(board_size, agent_board.cnf)
 
     if use_gui:
-        run_gui(board_size, truth_board.cnf, shot_history) # todo: add also agent board
+        run_gui(board_size, truth_board.cnf, shot_history)
 
     return truth_board.cnf
