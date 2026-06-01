@@ -143,6 +143,8 @@ class AgentVsAgent:
 
     def _run(self):
         """Runs the alternating-turn game loop until a winner is found or shots are exhausted."""
+        self._winner_label = None
+
         for turn in range(1, self.max_shots + 1):
             print(f"── Turn {turn} ──")
 
@@ -153,7 +155,10 @@ class AgentVsAgent:
                 self.ship_cells_2
             ):
                 print(f"\nAgent 1 wins in {len(self.shot_history_1)} shots!")
+                self._winner_label = "Agent 1"
                 self._print_summary()
+                if self.use_gui:
+                    self._launch_gui()
                 return
 
             # Agent 2 shoots at Agent 1's board
@@ -163,11 +168,16 @@ class AgentVsAgent:
                 self.ship_cells_1
             ):
                 print(f"\nAgent 2 wins in {len(self.shot_history_2)} shots!")
+                self._winner_label = "Agent 2"
                 self._print_summary()
+                if self.use_gui:
+                    self._launch_gui()
                 return
 
         print(f"\nMax shots ({self.max_shots}) reached — no winner!")
         self._print_summary()
+        if self.use_gui:
+            self._launch_gui()
 
     def _print_summary(self):
         """Prints final statistics for both agents."""
@@ -184,3 +194,15 @@ class AgentVsAgent:
         visualize_board(self.board_size, self.truth_board_2.cnf)
         print(f"\n   Agent 1's board (Agent 2 shoots here):")
         visualize_board(self.board_size, self.truth_board_1.cnf)
+
+    def _launch_gui(self):
+        """Launches the Pygame multiplayer GUI with the completed shot histories."""
+        from src.multiplayer_gui import run_multiplayer_gui
+        run_multiplayer_gui(
+            board_size=self.board_size,
+            truth_cnf_1=self.truth_board_1.cnf,
+            truth_cnf_2=self.truth_board_2.cnf,
+            shot_history_1=self.shot_history_1,
+            shot_history_2=self.shot_history_2,
+            winner_label=self._winner_label,
+        )
