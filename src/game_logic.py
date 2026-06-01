@@ -265,119 +265,128 @@ def _get_sunk_ships_status(board_size, cnf):
 def get_intelligent_hunt_targets(board_size, cnf, shots_taken):
     """Returns a list of candidate (r,c) cells using intelligent directional hunting.
 
-    Intelligent Algorithm:
-      1. Check which ships have been sunk (patrol boat vs submarine)
-      2. Find all unprocessed hits (hits not covered by sunk ships)
-      3. For each unprocessed hit, determine likely ship orientation and length
-      4. Prioritize shots in the most likely direction based on:
-         - Which ships are still alive (1x2 patrol boat vs 1x3 submarine)
-         - Hit patterns that suggest horizontal vs vertical orientation
-         - Adjacent hits that form lines
+    Non-Omniscient Algorithm:
+      1. Find all unprocessed hits (hits not covered by sunk ships)
+      2. For each unprocessed hit, analyze ONLY observable hit patterns
+      3. Determine ship orientation and likely length from hit patterns alone
+      4. Prioritize shots based on:
+         - Adjacent hits that form lines (indicating orientation)
+         - Misses that constrain ship placement
+         - Conservative assumptions about ship lengths (try both 2 and 3)
     """
     unprocessed_hits = _get_unprocessed_hits(board_size, cnf)
     if not unprocessed_hits:
         return []
 
-    sunk_status = _get_sunk_ships_status(board_size, cnf)
     unit_clauses = _get_unit_clause_set(cnf)
     
-    # Get all current hits for pattern analysis
+    # Get all current hits and misses for pattern analysis
     all_hits = {(r, c) for r in range(board_size) for c in range(board_size)
                 if get_var(board_size, 8, r, c) in unit_clauses}
+    all_misses = {(r, c) for r in range(board_size) for c in range(board_size)
+                  if get_var(board_size, 9, r, c) in unit_clauses}
     
     candidates = []
     seen = set()
 
-    print(f"  Ship status: Patrol Boat sunk={sunk_status['patrol_boat']}, Submarine sunk={sunk_status['submarine']}")
+    print(f"  Analyzing {len(unprocessed_hits)} unprocessed hits using observable patterns only")
     
     for (hr, hc) in unprocessed_hits:
-        # Analyze hit patterns around this hit to determine likely orientation
-        horizontal_hits = []
-        vertical_hits = []
+        # Find adjacent hits to determine orientation
+        adjacent_horizontal = []
+        adjacent_vertical = []
         
-        # Check for adjacent hits in horizontal direction
-        for dc in [-2, -1, 1, 2]:
+        # Check for immediately adjacent hits (distance 1)
+        for dc in [-1, 1]:
             if 0 <= hc + dc < board_size and (hr, hc + dc) in all_hits:
-                horizontal_hits.append((hr, hc + dc))
+                adjacent_horizontal.append((hr, hc + dc))
         
-        # Check for adjacent hits in vertical direction  
-        for dr in [-2, -1, 1, 2]:
+        for dr in [-1, 1]:
             if 0 <= hr + dr < board_size and (hr + dr, hc) in all_hits:
-                vertical_hits.append((hr + dr, hc))
+                adjacent_vertical.append((hr + dr, hc))
         
-        # Determine target ship length based on what's still alive
-        target_lengths = []
-        if not sunk_status['patrol_boat']:
-            target_lengths.append(2)  # Looking for 1x2 patrol boat
-        if not sunk_status['submarine']:
-            target_lengths.append(3)  # Looking for 1x3 submarine
+        print(f"    Hit at ({hr}, {hc}): adjacent_horizontal={adjacent_horizontal}, adjacent_vertical={adjacent_vertical}")
         
-        # If no ships left to find, shouldn't happen but fallback
-        if not target_lengths:
-            target_lengths = [2, 3]
-        
-        print(f"    Analyzing hit at ({hr}, {hc}): horizontal_hits={horizontal_hits}, vertical_hits={vertical_hits}")
-        print(f"    Target lengths: {target_lengths}")
-        
-        # Prioritize directions based on existing hit patterns and target ship lengths
-        direction_priorities = []
-        
-        # If we have horizontal hits, prioritize horizontal expansion
-        if horizontal_hits:
-            # Find the extent of horizontal hits
-            min_c = min(hc, min(c for r, c in horizontal_hits))
-            max_c = max(hc, max(c for r, c in horizontal_hits))
-            current_length = max_c - min_c + 1
+        # Determine orientation based on adjacent hits
+        if adjacent_horizontal and not adjacent_vertical:
+            # Clear horizontal pattern - extend horizontally
+            all_horizontal = [(hr, hc)] + adjacent_horizontal
+            min_c = min(c for r, c in all_horizontal)
+            max_c = max(c for r, c in all_horizontal)
             
-            # Add horizontal neighbors if we haven't reached target length
-            for target_len in target_lengths:
-                if current_length < target_len:
-                    # Try to extend left
-                    if min_c - 1 >= 0:
-                        direction_priorities.append(('horizontal', hr, min_c - 1, target_len))
-                    # Try to extend right
-                    if max_c + 1 < board_size:
-                        direction_priorities.append(('horizontal', hr, max_c + 1, target_len))
-        
-        # If we have vertical hits, prioritize vertical expansion
-        if vertical_hits:
-            # Find the extent of vertical hits
-            min_r = min(hr, min(r for r, c in vertical_hits))
-            max_r = max(hr, max(r for r, c in vertical_hits))
-            current_length = max_r - min_r + 1
+            # Try to extend the horizontal line
+            candidates_to_add = []
+            if min_c - 1 >= 0 and (hr, min_c - 1) not in shots_taken:
+                candidates_to_add.append((hr, min_c - 1))
+            if max_c + 1 < board_size and (hr, max_c + 1) not in shots_taken:
+                candidates_to_add.append((hr, max_c + 1))
             
-            # Add vertical neighbors if we haven't reached target length
-            for target_len in target_lengths:
-                if current_length < target_len:
-                    # Try to extend up
-                    if min_r - 1 >= 0:
-                        direction_priorities.append(('vertical', min_r - 1, hc, target_len))
-                    # Try to extend down
-                    if max_r + 1 < board_size:
-                        direction_priorities.append(('vertical', max_r + 1, hc, target_len))
-        
-        # If no clear pattern yet, try all 4 directions with preference for longer ships first
-        if not horizontal_hits and not vertical_hits:
-            for target_len in sorted(target_lengths, reverse=True):  # Longer ships first
-                # Horizontal directions
-                direction_priorities.append(('horizontal', hr, hc - 1, target_len))
-                direction_priorities.append(('horizontal', hr, hc + 1, target_len))
-                # Vertical directions  
-                direction_priorities.append(('vertical', hr - 1, hc, target_len))
-                direction_priorities.append(('vertical', hr + 1, hc, target_len))
-        
-        # Add candidates based on priorities
-        for direction, nr, nc, target_len in direction_priorities:
-            # Check bounds
-            if not (0 <= nr < board_size and 0 <= nc < board_size):
-                continue
-            # Skip if already shot or already added to candidates
-            if (nr, nc) in shots_taken or (nr, nc) in seen:
-                continue
+            print(f"      Horizontal pattern detected, extending: {candidates_to_add}")
             
-            seen.add((nr, nc))
-            candidates.append((nr, nc))
-            print(f"      Added {direction} target at ({nr}, {nc}) for length {target_len}")
+        elif adjacent_vertical and not adjacent_horizontal:
+            # Clear vertical pattern - extend vertically
+            all_vertical = [(hr, hc)] + adjacent_vertical
+            min_r = min(r for r, c in all_vertical)
+            max_r = max(r for r, c in all_vertical)
+            
+            # Try to extend the vertical line
+            candidates_to_add = []
+            if min_r - 1 >= 0 and (min_r - 1, hc) not in shots_taken:
+                candidates_to_add.append((min_r - 1, hc))
+            if max_r + 1 < board_size and (max_r + 1, hc) not in shots_taken:
+                candidates_to_add.append((max_r + 1, hc))
+            
+            print(f"      Vertical pattern detected, extending: {candidates_to_add}")
+            
+        else:
+            # No clear pattern or conflicting patterns - try all 4 directions
+            # But use miss information to constrain choices
+            candidates_to_add = []
+            
+            # Check each direction, avoiding areas blocked by misses
+            directions = [
+                (hr - 1, hc, 'up'),
+                (hr + 1, hc, 'down'), 
+                (hr, hc - 1, 'left'),
+                (hr, hc + 1, 'right')
+            ]
+            
+            for nr, nc, direction_name in directions:
+                if not (0 <= nr < board_size and 0 <= nc < board_size):
+                    continue
+                if (nr, nc) in shots_taken:
+                    continue
+                
+                # Check if this direction is blocked by misses
+                blocked = False
+                
+                # For horizontal directions, check if vertical neighbors are misses
+                if direction_name in ['left', 'right']:
+                    if ((hr - 1, hc) in all_misses and (hr + 1, hc) in all_misses):
+                        # Vertical neighbors are misses, so this must be horizontal ship
+                        candidates_to_add.append((nr, nc))
+                        print(f"      Direction {direction_name} prioritized due to vertical misses")
+                    elif (hr - 1, hc) not in all_misses and (hr + 1, hc) not in all_misses:
+                        # No vertical constraints, add as possibility
+                        candidates_to_add.append((nr, nc))
+                
+                # For vertical directions, check if horizontal neighbors are misses  
+                elif direction_name in ['up', 'down']:
+                    if ((hr, hc - 1) in all_misses and (hr, hc + 1) in all_misses):
+                        # Horizontal neighbors are misses, so this must be vertical ship
+                        candidates_to_add.append((nr, nc))
+                        print(f"      Direction {direction_name} prioritized due to horizontal misses")
+                    elif (hr, hc - 1) not in all_misses and (hr, hc + 1) not in all_misses:
+                        # No horizontal constraints, add as possibility
+                        candidates_to_add.append((nr, nc))
+            
+            print(f"      No clear pattern, trying constrained directions: {candidates_to_add}")
+        
+        # Add candidates, avoiding duplicates
+        for nr, nc in candidates_to_add:
+            if (nr, nc) not in seen:
+                seen.add((nr, nc))
+                candidates.append((nr, nc))
 
     print(f"  Intelligent hunt targets for unprocessed hits {unprocessed_hits}: {candidates}")
     return candidates
