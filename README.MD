@@ -110,6 +110,12 @@ From the rule of the game we know that:
 **Exactly one Battleship placement**:
 - $(Battleship_{h,0,0} \lor Battleship_{h,0,1} \lor \ldots \lor Battleship_{v,9,6}) \land \neg (Battleship_{h,i,j} \land Battleship_{h,i',j'})$ for all $(i,j) \neq (i',j')$
 
+**Carrier**: carrier at position (i,j):
+- $Carrier_{i,j} \implies (SP_{i,j} \land SP_{i,j+1} \land SP_{i+1,j} \land SP_{i+1,j+1})$
+
+**Exactly one Carrier placement**:
+- $(Carrier_{0,0} \lor Carrier_{0,1} \lor \ldots \lor Carrier_{8,8}) \land \neg (Carrier_{i,j} \land Carrier_{i',j'})$ for all $(i,j) \neq (i',j')$
+
 **Cannot place any ships e.g. Submarine and PatrolBoat adjacently**
 - **PatrolBoat horizontal**: $PB_{h,i,j} \implies (\neg SP_{i,j-1} \land \neg SP_{i,j+2} \land \neg SP_{i+1,j} \land \neg SP_{i-1,j} \land \neg SP_{i+1,j+1} \land \neg SP_{i-1,j+1})$
 - **PatrolBoat vertical**: $PB_{v,i,j} \implies (\neg SP_{i-1,j} \land \neg SP_{i+2,j} \land \neg SP_{i,j+1} \land \neg SP_{i,j-1} \land \neg SP_{i+1,j+1} \land \neg SP_{i+1,j-1})$
@@ -117,6 +123,7 @@ From the rule of the game we know that:
 - **Submarine vertical**: $SM_{v,i,j} \implies (\neg SP_{i-1,j} \land \neg SP_{i+3,j} \land \neg SP_{i,j+1} \land \neg SP_{i,j-1} \land \neg SP_{i-1,j+1} \land \neg SP_{i-1,j-1} \land \neg SP_{i+1,j+1} \land \neg SP_{i+1,j-1} \land \neg SP_{i+2,j+1} \land \neg SP_{i+2,j-1})$
 - **Battleship horizontal**: $BS_{h,i,j} \implies (\neg SP_{i,j-1} \land \neg SP_{i,j+4} \land \neg SP_{i+1,j} \land \neg SP_{i-1,j} \land \neg SP_{i+1,j-1} \land \neg SP_{i-1,j-1} \land \neg SP_{i+1,j+1} \land \neg SP_{i-1,j+1} \land \neg SP_{i+1,j+2} \land \neg SP_{i-1,j+2} \land \neg SP_{i+1,j+3} \land \neg SP_{i-1,j+3})$
 - **Battleship vertical**: $BS_{v,i,j} \implies (\neg SP_{i-1,j} \land \neg SP_{i+4,j} \land \neg SP_{i,j+1} \land \neg SP_{i,j-1} \land \neg SP_{i-1,j+1} \land \neg SP_{i-1,j-1} \land \neg SP_{i+1,j+1} \land \neg SP_{i+1,j-1} \land \neg SP_{i+2,j+1} \land \neg SP_{i+2,j-1} \land \neg SP_{i+3,j+1} \land \neg SP_{i+3,j-1})$
+- **Carrier**: $CR_{i,j} \implies (\neg SP_{i-1,j} \land \neg SP_{i-1,j+1} \land \neg SP_{i,j-1} \land \neg SP_{i,j+2} \land \neg SP_{i+1,j-1} \land \neg SP_{i+1,j+2} \land \neg SP_{i+2,j} \land \neg SP_{i+2,j+1} \land \neg SP_{i-1,j-1} \land \neg SP_{i-1,j+2} \land \neg SP_{i+2,j-1} \land \neg SP_{i+2,j+2})$
 
 ### Shot, Hit and Miss tiles
 - $Shot_{i,j}$ true if a tile has been shoot
@@ -146,6 +153,9 @@ If the agent shot and horizontal neighbours are misses, then the ship must be ve
 - $Sunk_{Battleship_{h,i,j}} \iff (Hit_{i,j} \land Hit_{i,j+1} \land Hit_{i,j+2} \land Hit_{i,j+3})$ 
 - $Sunk_{Battleship_{v,i,j}} \iff (Hit_{i,j} \land Hit_{i+1,j} \land Hit_{i+2,j} \land Hit_{i+3,j})$
 
+**Sunk Carrier**
+- $Sunk_{Carrier_{i,j}} \iff (Hit_{i,j} \land Hit_{i,j+1} \land Hit_{i+1,j} \land Hit_{i+1,j+1})$
+
 
 **AllPartsSunk Consequences**
 Once you've hit all parts of a ship, you know the surrounding area is empty:
@@ -160,6 +170,8 @@ $Sunk_{SM_{v,i,j}} \implies \neg SP_{i-1,j} \land \neg SP_{i+3,j} \land \neg SP_
 $Sunk_{BS_{h,i,j}} \implies \neg SP_{i,j-1} \land \neg SP_{i,j+4} \land \neg SP_{i-1,j} \land \neg SP_{i-1,j+1} \land \neg SP_{i-1,j+2} \land \neg SP_{i-1,j+3} \land \neg SP_{i+1,j} \land \neg SP_{i+1,j+1} \land \neg SP_{i+1,j+2} \land \neg SP_{i+1,j+3}$
 - Battleship vertical at (i,j):
 $Sunk_{BS_{v,i,j}} \implies \neg SP_{i-1,j} \land \neg SP_{i+4,j} \land \neg SP_{i,j-1} \land \neg SP_{i+1,j-1} \land \neg SP_{i+2,j-1} \land \neg SP_{i+3,j-1} \land \neg SP_{i,j+1} \land \neg SP_{i+1,j+1} \land \neg SP_{i+2,j+1} \land \neg SP_{i+3,j+1}$
+- Carrier at (i,j):
+$Sunk_{CR_{i,j}} \implies \neg SP_{i-1,j} \land \neg SP_{i-1,j+1} \land \neg SP_{i,j-1} \land \neg SP_{i,j+2} \land \neg SP_{i+1,j-1} \land \neg SP_{i+1,j+2} \land \neg SP_{i+2,j} \land \neg SP_{i+2,j+1} \land \neg SP_{i-1,j-1} \land \neg SP_{i-1,j+2} \land \neg SP_{i+2,j-1} \land \neg SP_{i+2,j+2}$
 
 
 ---
