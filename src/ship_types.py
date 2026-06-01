@@ -1,11 +1,41 @@
+"""Ship type definitions, placement, and constraint functions.
+
+Each ship type (PatrolBoat, Submarine, Battleship, Carrier) has:
+  - A ``add_<ship>_to_board`` function that randomly places one instance.
+  - A ``add_<ship>_constraints`` function that encodes placement implications
+    and exactly-one constraints.
+  - A ``add_<ship>_non_adjacent_constraints`` function that forbids ship parts
+    in the buffer zone around each possible placement.
+  - A ``<Ship>Factory`` class that orchestrates all three for convenience.
+"""
+
 import random
 from src.utils import _get_ship_cells, get_var, _get_forbidden_cells
 
-# Patrol Boat
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Patrol Boat (1×2)
+# ──────────────────────────────────────────────────────────────────────────────
+
 def add_patrol_boat_to_board(board_size, cnf, occupied=None):
-    """Adds exactly one patrol boat to the board by choosing a random valid placement.
-    `occupied` is a set of cells already taken (including adjacency buffer) to avoid conflicts.
-    Returns the set of cells (including buffer) now occupied."""
+    """Randomly places exactly one patrol boat (1×2) on the board.
+
+    Collects all valid horizontal and vertical placements that do not conflict
+    with already-occupied cells (including adjacency buffers), then picks one
+    uniformly at random. Asserts the placement variable and SP variables as
+    unit clauses.
+
+    Args:
+        board_size: The side length of the square board.
+        cnf: The CNF to append placement unit clauses to.
+        occupied: Set of (row, col) cells already taken. Defaults to empty.
+
+    Returns:
+        Updated occupied set including the new ship's cells and buffer.
+
+    Raises:
+        RuntimeError: If no valid placement exists.
+    """
     if occupied is None:
         occupied = set()
 
@@ -41,6 +71,24 @@ def add_patrol_boat_to_board(board_size, cnf, occupied=None):
     return occupied | _get_forbidden_cells(board_size, cells)
 
 def add_patrol_boat_constraints(board_size, cnf):
+    """Encodes patrol boat placement implications and exactly-one constraints.
+
+    For every valid horizontal placement ``PB_{h,r,c}``:
+      - ``PB_{h,r,c} -> SP_{r,c} ∧ SP_{r,c+1}``
+
+    For every valid vertical placement ``PB_{v,r,c}``:
+      - ``PB_{v,r,c} -> SP_{r,c} ∧ SP_{r+1,c}``
+
+    Exactly-one: at least one placement must be true, and no two placements
+    can be true simultaneously (pairwise mutual exclusion).
+
+    Args:
+        board_size: The side length of the square board.
+        cnf: The CNF to append clauses to.
+
+    Returns:
+        The same CNF object with the new clauses appended.
+    """
     # Variables: 
     # Type 3 = Patrol Boat Horizontal placement
     # Type 4 = Patrol Boat Vertical placement
@@ -148,11 +196,24 @@ def add_patrol_boat_non_adjacent_constraints(board_size, cnf):
 
 
 
-# Submarine
+# ──────────────────────────────────────────────────────────────────────────────
+# Submarine (1×3)
+# ──────────────────────────────────────────────────────────────────────────────
+
 def add_submarine_to_board(board_size, cnf, occupied=None):
-    """Adds exactly one submarine to the board by choosing a random valid placement.
-    `occupied` is a set of cells already taken (including adjacency buffer) to avoid conflicts.
-    Returns the set of cells (including buffer) now occupied."""
+    """Randomly places exactly one submarine (1×3) on the board.
+
+    Args:
+        board_size: The side length of the square board.
+        cnf: The CNF to append placement unit clauses to.
+        occupied: Set of (row, col) cells already taken. Defaults to empty.
+
+    Returns:
+        Updated occupied set including the new ship's cells and buffer.
+
+    Raises:
+        RuntimeError: If no valid placement exists.
+    """
     if occupied is None:
         occupied = set()
 
@@ -186,6 +247,24 @@ def add_submarine_to_board(board_size, cnf, occupied=None):
 
 
 def add_submarine_constraints(board_size, cnf):
+    """Encodes submarine placement implications and exactly-one constraints.
+
+    For every valid horizontal placement ``SM_{h,r,c}``:
+      - ``SM_{h,r,c} -> SP_{r,c} ∧ SP_{r,c+1} ∧ SP_{r,c+2}``
+
+    For every valid vertical placement ``SM_{v,r,c}``:
+      - ``SM_{v,r,c} -> SP_{r,c} ∧ SP_{r+1,c} ∧ SP_{r+2,c}``
+
+    Exactly-one: at least one placement must be true, and no two placements
+    can be true simultaneously.
+
+    Args:
+        board_size: The side length of the square board.
+        cnf: The CNF to append clauses to.
+
+    Returns:
+        The same CNF object with the new clauses appended.
+    """
     # Variables: 
     # Type 5 = Submarine Horizontal placement
     # Type 6 = Submarine Vertical placement
@@ -302,9 +381,24 @@ def add_submarine_non_adjacent_constraints(board_size, cnf):
     return cnf
 
 
-# Battleship
+# ──────────────────────────────────────────────────────────────────────────────
+# Battleship (1×4)
+# ──────────────────────────────────────────────────────────────────────────────
+
 def add_battleship_to_board(board_size, cnf, occupied=None):
-    """Adds exactly one battleship to the board by choosing a random valid placement."""
+    """Randomly places exactly one battleship (1×4) on the board.
+
+    Args:
+        board_size: The side length of the square board.
+        cnf: The CNF to append placement unit clauses to.
+        occupied: Set of (row, col) cells already taken. Defaults to empty.
+
+    Returns:
+        Updated occupied set including the new ship's cells and buffer.
+
+    Raises:
+        RuntimeError: If no valid placement exists.
+    """
     if occupied is None:
         occupied = set()
 
@@ -338,6 +432,24 @@ def add_battleship_to_board(board_size, cnf, occupied=None):
 
 
 def add_battleship_constraints(board_size, cnf):
+    """Encodes battleship placement implications and exactly-one constraints.
+
+    For every valid horizontal placement ``BS_{h,r,c}``:
+      - ``BS_{h,r,c} -> SP_{r,c} ∧ SP_{r,c+1} ∧ SP_{r,c+2} ∧ SP_{r,c+3}``
+
+    For every valid vertical placement ``BS_{v,r,c}``:
+      - ``BS_{v,r,c} -> SP_{r,c} ∧ SP_{r+1,c} ∧ SP_{r+2,c} ∧ SP_{r+3,c}``
+
+    Exactly-one: at least one placement must be true, and no two placements
+    can be true simultaneously.
+
+    Args:
+        board_size: The side length of the square board.
+        cnf: The CNF to append clauses to.
+
+    Returns:
+        The same CNF object with the new clauses appended.
+    """
     all_placements = []
     for r in range(board_size):
         for c in range(board_size):
@@ -359,6 +471,18 @@ def add_battleship_constraints(board_size, cnf):
 
 
 def add_battleship_non_adjacent_constraints(board_size, cnf):
+    """Encodes non-adjacency constraints for the battleship (length 4).
+
+    For each valid placement, no ship part may appear in any buffer cell
+    surrounding the 4-cell ship.
+
+    Args:
+        board_size: The side length of the square board.
+        cnf: The CNF to append clauses to.
+
+    Returns:
+        The same CNF object with the new clauses appended.
+    """
     for r in range(board_size):
         for c in range(board_size - 3):
             bs_h = get_var(board_size, 14, r, c)
@@ -376,9 +500,24 @@ def add_battleship_non_adjacent_constraints(board_size, cnf):
     return cnf
 
 
-# Carrier (2x2)
+# ──────────────────────────────────────────────────────────────────────────────
+# Carrier (2×2)
+# ──────────────────────────────────────────────────────────────────────────────
+
 def add_carrier_to_board(board_size, cnf, occupied=None):
-    """Adds exactly one carrier to the board by choosing a random valid placement."""
+    """Randomly places exactly one carrier (2×2) on the board.
+
+    Args:
+        board_size: The side length of the square board.
+        cnf: The CNF to append placement unit clauses to.
+        occupied: Set of (row, col) cells already taken. Defaults to empty.
+
+    Returns:
+        Updated occupied set including the new ship's cells and buffer.
+
+    Raises:
+        RuntimeError: If no valid placement exists.
+    """
     if occupied is None:
         occupied = set()
 
@@ -403,6 +542,21 @@ def add_carrier_to_board(board_size, cnf, occupied=None):
 
 
 def add_carrier_constraints(board_size, cnf):
+    """Encodes carrier placement implications and exactly-one constraints.
+
+    For every valid placement ``CR_{r,c}``:
+      - ``CR_{r,c} -> SP_{r,c} ∧ SP_{r,c+1} ∧ SP_{r+1,c} ∧ SP_{r+1,c+1}``
+
+    Exactly-one: at least one placement must be true, and no two placements
+    can be true simultaneously.
+
+    Args:
+        board_size: The side length of the square board.
+        cnf: The CNF to append clauses to.
+
+    Returns:
+        The same CNF object with the new clauses appended.
+    """
     all_placements = []
     for r in range(board_size - 1):
         for c in range(board_size - 1):
@@ -421,6 +575,18 @@ def add_carrier_constraints(board_size, cnf):
 
 
 def add_carrier_non_adjacent_constraints(board_size, cnf):
+    """Encodes non-adjacency constraints for the carrier (2×2).
+
+    For each valid placement, no ship part may appear in any buffer cell
+    surrounding the 4-cell (2×2) ship.
+
+    Args:
+        board_size: The side length of the square board.
+        cnf: The CNF to append clauses to.
+
+    Returns:
+        The same CNF object with the new clauses appended.
+    """
     for r in range(board_size - 1):
         for c in range(board_size - 1):
             cr_var = get_var(board_size, 18, r, c)
@@ -432,10 +598,33 @@ def add_carrier_non_adjacent_constraints(board_size, cnf):
 
 
 class PatrolBoatFactory:
+    """Factory that places a patrol boat and adds all its constraints.
+
+    Orchestrates ``add_patrol_boat_to_board``, ``add_patrol_boat_constraints``,
+    and ``add_patrol_boat_non_adjacent_constraints`` in a single ``build`` call.
+
+    Attributes:
+        board_size: The side length of the square board.
+    """
+
     def __init__(self, board_size):
+        """Initializes the factory.
+
+        Args:
+            board_size: The side length of the square board.
+        """
         self.board_size = board_size
 
     def build(self, cnf, occupied=None):
+        """Places a patrol boat and adds placement + non-adjacency constraints.
+
+        Args:
+            cnf: The CNF to modify.
+            occupied: Set of already-occupied cells. Defaults to empty.
+
+        Returns:
+            Updated occupied set.
+        """
         if occupied is None:
             occupied = set()
         occupied = add_patrol_boat_to_board(self.board_size, cnf, occupied)
@@ -445,10 +634,30 @@ class PatrolBoatFactory:
 
 
 class SubmarineFactory:
+    """Factory that places a submarine and adds all its constraints.
+
+    Attributes:
+        board_size: The side length of the square board.
+    """
+
     def __init__(self, board_size):
+        """Initializes the factory.
+
+        Args:
+            board_size: The side length of the square board.
+        """
         self.board_size = board_size
 
     def build(self, cnf, occupied=None):
+        """Places a submarine and adds placement + non-adjacency constraints.
+
+        Args:
+            cnf: The CNF to modify.
+            occupied: Set of already-occupied cells. Defaults to empty.
+
+        Returns:
+            Updated occupied set.
+        """
         if occupied is None:
             occupied = set()
         occupied = add_submarine_to_board(self.board_size, cnf, occupied)
@@ -458,10 +667,30 @@ class SubmarineFactory:
 
 
 class BattleshipFactory:
+    """Factory that places a battleship and adds all its constraints.
+
+    Attributes:
+        board_size: The side length of the square board.
+    """
+
     def __init__(self, board_size):
+        """Initializes the factory.
+
+        Args:
+            board_size: The side length of the square board.
+        """
         self.board_size = board_size
 
     def build(self, cnf, occupied=None):
+        """Places a battleship and adds placement + non-adjacency constraints.
+
+        Args:
+            cnf: The CNF to modify.
+            occupied: Set of already-occupied cells. Defaults to empty.
+
+        Returns:
+            Updated occupied set.
+        """
         if occupied is None:
             occupied = set()
         occupied = add_battleship_to_board(self.board_size, cnf, occupied)
@@ -471,10 +700,30 @@ class BattleshipFactory:
 
 
 class CarrierFactory:
+    """Factory that places a carrier and adds all its constraints.
+
+    Attributes:
+        board_size: The side length of the square board.
+    """
+
     def __init__(self, board_size):
+        """Initializes the factory.
+
+        Args:
+            board_size: The side length of the square board.
+        """
         self.board_size = board_size
 
     def build(self, cnf, occupied=None):
+        """Places a carrier and adds placement + non-adjacency constraints.
+
+        Args:
+            cnf: The CNF to modify.
+            occupied: Set of already-occupied cells. Defaults to empty.
+
+        Returns:
+            Updated occupied set.
+        """
         if occupied is None:
             occupied = set()
         occupied = add_carrier_to_board(self.board_size, cnf, occupied)

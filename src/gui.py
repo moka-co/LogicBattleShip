@@ -1,9 +1,27 @@
+"""Pygame-based GUI visualization for the Battleship game.
+
+Provides a text-based board printer and an animated Pygame window that replays
+the shot history step-by-step.
+"""
+
 import pygame
 import time
 from src.utils import get_var
 
+
 def visualize_board(board_size, cnf):
-    """Prints a simple text representation of the board."""
+    """Prints a text representation of the board to stdout.
+
+    Legend:
+      - ``[H]`` — Hit.
+      - ``[S]`` — Ship part (unrevealed).
+      - ``[0]`` — Miss.
+      - ``[ ]`` — Unknown / empty.
+
+    Args:
+        board_size: The side length of the square board.
+        cnf: The CNF whose unit clauses determine cell states.
+    """
     print("Board Visualization:")
     # Create a set of unit clauses for faster lookup
     unit_clauses = {c[0] for c in cnf.clauses if len(c) == 1}
@@ -22,9 +40,18 @@ def visualize_board(board_size, cnf):
                 row_str += "[ ]"
         print(row_str)
 
-# PyGame GUI
 def run_gui(board_size, cnf, shot_history):
-    """Pygame visualization of the board state with step-by-step animation."""
+    """Launches a Pygame window that animates the shot history step-by-step.
+
+    Each shot is replayed at 0.5-second intervals. Hits are shown in red,
+    misses in blue, and remaining ship cells are revealed in green once all
+    ships are sunk or all shots have been replayed.
+
+    Args:
+        board_size: The side length of the square board.
+        cnf: The truth board's CNF (used to identify ship locations).
+        shot_history: Ordered list of ``(row, col, was_hit)`` tuples.
+    """
     pygame.init()
     cell_size = 40
     screen = pygame.display.set_mode((board_size * cell_size, board_size * cell_size))

@@ -1,8 +1,16 @@
+"""Entry point for the Battleship SAT Solver.
+
+Parses command-line arguments and launches a simulation with the chosen
+board size, shot count, strategy, and optional GUI.
+"""
+
 import argparse
 from src.board import TruthBoardFactory, AgentBoardFactory
 from src.game_logic import SimulateSimpleGame, SimulateIntelligentGame, SimulateCheckerboardIntelligentGame
 
+
 def main():
+    """Parses CLI arguments, builds the truth and agent boards, and runs the simulation."""
     parser = argparse.ArgumentParser(description="Battleship SAT Solver")
     parser.add_argument(
         "--size", 

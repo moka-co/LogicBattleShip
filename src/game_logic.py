@@ -1,3 +1,13 @@
+"""Game logic, strategies, and simulation classes for the Battleship SAT solver.
+
+Provides:
+  - Shot recording and board visualization helpers.
+  - Sunk-ship detection and coverage computation.
+  - Hunt-target generation (simple, intelligent/SAT-guided, checkerboard).
+  - Strategy classes that wrap target generation with random selection.
+  - Simulation classes that run a full game loop for each strategy.
+"""
+
 import random
 from pysat.solvers import Glucose3
 from src.ship_types import *
@@ -7,10 +17,22 @@ from src.gui import run_gui
 
 
 def _get_unprocessed_hits(board_size, cnf):
-        unit_clauses = _get_unit_clause_set(cnf)
-        sunk_covered = _get_sunk_covered_cells(board_size, cnf)
-        return [(r, c) for r in range(board_size) for c in range(board_size)
-                if get_var(board_size, 8, r, c) in unit_clauses and (r, c) not in sunk_covered]
+    """Returns a list of hit cells whose ship has not yet been fully sunk.
+
+    Scans the CNF for asserted ``Hit_{r,c}`` unit clauses and filters out any
+    cell that is covered by an asserted Sunk variable.
+
+    Args:
+        board_size: The side length of the square board.
+        cnf: The agent's CNF knowledge base.
+
+    Returns:
+        A list of (row, col) tuples representing open (unsunk) hits.
+    """
+    unit_clauses = _get_unit_clause_set(cnf)
+    sunk_covered = _get_sunk_covered_cells(board_size, cnf)
+    return [(r, c) for r in range(board_size) for c in range(board_size)
+            if get_var(board_size, 8, r, c) in unit_clauses and (r, c) not in sunk_covered]
 
 def record_shot(board_size, cnf, r, c, was_hit):
     """Records a shot outcome by appending unit clauses to the CNF."""
@@ -28,7 +50,18 @@ def record_shot(board_size, cnf, r, c, was_hit):
 
 
 def visualize_board(board_size, cnf):
-    """Prints a simple text representation of the board."""
+    """Prints a text representation of the board to stdout.
+
+    Legend:
+      - ``[H]`` — Hit (the cell was shot and contained a ship part).
+      - ``[S]`` — Ship part (not yet shot; only visible on the truth board).
+      - ``[0]`` — Miss (the cell was shot and was empty).
+      - ``[ ]`` — Unknown / empty.
+
+    Args:
+        board_size: The side length of the square board.
+        cnf: The CNF whose unit clauses determine cell states.
+    """
     print("Board Visualization:")
     unit_clauses = {c[0] for c in cnf.clauses if len(c) == 1}
     for r in range(board_size):
@@ -46,15 +79,53 @@ def visualize_board(board_size, cnf):
 
 
 def is_ship_part(board_size, cnf, r, c):
+    """Checks whether cell (r, c) contains a ship part on the truth board.
+
+    Looks for the ``SP_{r,c}`` variable as a unit clause in the CNF.
+
+    Args:
+        board_size: The side length of the square board.
+        cnf: The truth board's CNF (must have ship placements asserted).
+        r: Row index.
+        c: Column index.
+
+    Returns:
+        True if ``SP_{r,c}`` is asserted as a unit clause, False otherwise.
+    """
     unit_clauses = {clause[0] for clause in cnf.clauses if len(clause) == 1}
     return get_var(board_size, 1, r, c) in unit_clauses
 
 
 def _get_unit_clause_set(cnf):
+    """Extracts all unit-clause literals from a CNF as a set.
+
+    A unit clause is a clause with exactly one literal. These represent facts
+    that are unconditionally asserted in the knowledge base (e.g. shot outcomes,
+    ship placements on the truth board, propagated sunk variables).
+
+    Args:
+        cnf: A ``pysat.formula.CNF`` object.
+
+    Returns:
+        A set of integers, each being the single literal of a unit clause.
+    """
     return {clause[0] for clause in cnf.clauses if len(clause) == 1}
 
 
 def _sunk_covers_cell(board_size, sunk_type, sr, sc, r, c):
+    """Checks whether a sunk ship at (sr, sc) of the given type covers cell (r, c).
+
+    Args:
+        board_size: The side length of the square board (unused but kept for API consistency).
+        sunk_type: The variable type of the Sunk predicate (10–13, 16–17, 19).
+        sr: Starting row of the sunk ship.
+        sc: Starting column of the sunk ship.
+        r: Row of the cell to check.
+        c: Column of the cell to check.
+
+    Returns:
+        True if the ship at (sr, sc) of the given sunk_type occupies cell (r, c).
+    """
     if sunk_type == 10:
         return r == sr and (c == sc or c == sc + 1)
     if sunk_type == 11:
@@ -123,6 +194,22 @@ def _is_cell_in_sunk_ship(board_size, cnf, r, c):
 
 
 def get_simple_hunt_targets(board_size, cnf, shots_taken):
+    """Returns candidate cells adjacent to open hits using simple neighbor enumeration.
+
+    Checks all 8 neighbors (orthogonal + diagonal) of each unprocessed hit.
+    Diagonal neighbors are included because the Carrier is 2×2, so a diagonal
+    cell can be part of the same ship.
+
+    No SAT reasoning is performed — every unshot, in-bounds neighbor is returned.
+
+    Args:
+        board_size: The side length of the square board.
+        cnf: The agent's CNF knowledge base.
+        shots_taken: Set of (row, col) tuples already shot.
+
+    Returns:
+        A list of (row, col) candidate cells to shoot next. Empty if no open hits.
+    """
     unprocessed_hits = _get_unprocessed_hits(board_size, cnf)
     if not unprocessed_hits:
         return []
@@ -144,6 +231,19 @@ def get_simple_hunt_targets(board_size, cnf, shots_taken):
 
 
 def _get_sunk_ships_status(board_size, cnf):
+    """Returns a dict indicating which ship types have been sunk.
+
+    Scans the CNF unit clauses for any asserted Sunk variable of each ship type.
+
+    Args:
+        board_size: The side length of the square board.
+        cnf: The agent's CNF knowledge base.
+
+    Returns:
+        A dict with keys ``'patrol_boat'``, ``'submarine'``, ``'battleship'``,
+        ``'carrier'``, each mapping to a bool indicating whether that ship type
+        has at least one asserted Sunk variable.
+    """
     unit_clauses = _get_unit_clause_set(cnf)
     patrol_boat_sunk = any(get_var(board_size, 10, r, c) in unit_clauses for r in range(board_size) for c in range(board_size - 1)) or \
                        any(get_var(board_size, 11, r, c) in unit_clauses for r in range(board_size - 1) for c in range(board_size))
@@ -199,10 +299,17 @@ def get_intelligent_hunt_targets(board_size, cnf, shots_taken):
 
 
 def get_checkerboard_targets(board_size, shots_taken):
-    """Returns a list of unshot cells in a checkerboard pattern with spacing of 2.
-    
-    The pattern targets cells where (r + c) is even, ensuring that any ship of
-    length >= 2 must overlap at least one of these cells.
+    """Returns unshot cells in a checkerboard pattern for efficient board coverage.
+
+    Targets cells where ``(r + c) % 2 == 0``, which guarantees that any ship
+    occupying 2 or more cells must overlap at least one checkerboard cell.
+
+    Args:
+        board_size: The side length of the square board.
+        shots_taken: Set of (row, col) tuples already shot.
+
+    Returns:
+        A list of (row, col) tuples on the checkerboard that have not been shot.
     """
     candidates = []
     for r in range(board_size):
@@ -213,12 +320,48 @@ def get_checkerboard_targets(board_size, shots_taken):
 
 
 class BattleshipStrategy:
+    """Abstract base class for Battleship shooting strategies.
+
+    Subclasses must implement ``get_hunt_candidates`` to return a target cell
+    and a boolean indicating whether the game should continue.
+    """
+
     def get_hunt_candidates(self, board_size, cnf, shots_taken):
+        """Selects the next cell to shoot.
+
+        Args:
+            board_size: The side length of the square board.
+            cnf: The agent's CNF knowledge base.
+            shots_taken: Set of (row, col) tuples already shot.
+
+        Returns:
+            A tuple ``(target, active)`` where ``target`` is a (row, col) tuple
+            or None, and ``active`` is False if no moves remain.
+
+        Raises:
+            NotImplementedError: Always, unless overridden by a subclass.
+        """
         raise NotImplementedError
 
 
 class BattleshipSimpleRandomStrategy(BattleshipStrategy):
+    """Strategy that shoots neighbors of open hits randomly, without SAT reasoning.
+
+    When open hits exist, picks a random neighbor from ``get_simple_hunt_targets``.
+    Otherwise falls back to a uniformly random unshot cell.
+    """
+
     def get_hunt_candidates(self, board_size, cnf, shots_taken):
+        """Selects a random neighbor of an open hit, or a random unshot cell.
+
+        Args:
+            board_size: The side length of the square board.
+            cnf: The agent's CNF knowledge base.
+            shots_taken: Set of (row, col) tuples already shot.
+
+        Returns:
+            A tuple ``(target, active)`` — see ``BattleshipStrategy``.
+        """
         hunt_candidates = get_simple_hunt_targets(board_size, cnf, shots_taken)
         target = random.choice(hunt_candidates) if hunt_candidates else None
         
@@ -231,7 +374,24 @@ class BattleshipSimpleRandomStrategy(BattleshipStrategy):
 
 
 class BattleshipIntelligentRandomStrategy(BattleshipStrategy):
+    """Strategy that uses SAT reasoning to pick forced or consistent neighbors.
+
+    Calls ``get_intelligent_hunt_targets`` to obtain cells that are logically
+    forced or consistent with containing a ship part. Picks randomly among them.
+    Falls back to a uniformly random unshot cell when no open hits exist.
+    """
+
     def get_hunt_candidates(self, board_size, cnf, shots_taken):
+        """Selects a SAT-guided target near open hits, or a random unshot cell.
+
+        Args:
+            board_size: The side length of the square board.
+            cnf: The agent's CNF knowledge base.
+            shots_taken: Set of (row, col) tuples already shot.
+
+        Returns:
+            A tuple ``(target, active)`` — see ``BattleshipStrategy``.
+        """
         hunt_candidates = get_intelligent_hunt_targets(board_size, cnf, shots_taken)
         target = random.choice(hunt_candidates) if hunt_candidates else None
         
@@ -244,10 +404,25 @@ class BattleshipIntelligentRandomStrategy(BattleshipStrategy):
 
 
 class BattleshipCheckerboardIntelligentStrategy(BattleshipStrategy):
-    """Strategy that uses a checkerboard search pattern until a ship part is hit,
-    then switches to intelligent hunt targets to finish off the ship.
+    """Hybrid strategy: checkerboard search for discovery, SAT hunting for kills.
+
+    When there are open (unsunk) hits, delegates to ``get_intelligent_hunt_targets``
+    to finish off the damaged ship. Otherwise, picks from a checkerboard pattern
+    to efficiently discover new ships. Falls back to any unshot cell if both
+    sources are exhausted.
     """
+
     def get_hunt_candidates(self, board_size, cnf, shots_taken):
+        """Selects a SAT-guided target if hunting, else a checkerboard cell.
+
+        Args:
+            board_size: The side length of the square board.
+            cnf: The agent's CNF knowledge base.
+            shots_taken: Set of (row, col) tuples already shot.
+
+        Returns:
+            A tuple ``(target, active)`` — see ``BattleshipStrategy``.
+        """
         # If there are unprocessed hits (ship struck but not sunk), use intelligent hunting
         hunt_candidates = get_intelligent_hunt_targets(board_size, cnf, shots_taken)
         if hunt_candidates:
@@ -269,7 +444,32 @@ class BattleshipCheckerboardIntelligentStrategy(BattleshipStrategy):
 
 
 class BaseSimulateGame:
+    """Abstract base class for running a Battleship simulation.
+
+    Manages the game loop scaffolding: shot tracking, hit history, early
+    termination detection, and final reporting. Subclasses implement
+    ``simulate()`` to wire in a specific ``BattleshipStrategy``.
+
+    Attributes:
+        board_size: Side length of the square board.
+        truth_board: The ``TruthBoardFactory`` instance (answers hit/miss queries).
+        agent_board: The ``AgentBoardFactory`` instance (agent's KB).
+        shots: Maximum number of shots allowed.
+        use_gui: Whether to launch the Pygame GUI after the game.
+        shots_taken: Set of (row, col) cells that have been shot.
+        shot_history: Ordered list of ``(row, col, was_hit)`` tuples.
+    """
+
     def __init__(self, board_size, shots, truth_board, agent_board, use_gui=False):
+        """Initializes the simulation and immediately runs it.
+
+        Args:
+            board_size: The side length of the square board.
+            shots: Maximum number of shots to fire.
+            truth_board: A ``TruthBoardFactory`` with ships placed.
+            agent_board: An ``AgentBoardFactory`` (no ships placed).
+            use_gui: If True, launch Pygame visualization after the game.
+        """
         self.board_size = board_size
         self.truth_board = truth_board
         self.agent_board = agent_board
@@ -280,21 +480,54 @@ class BaseSimulateGame:
         self.simulate()
 
     def _get_unit_clause_set(self, cnf):
+        """Extracts all unit-clause literals from a CNF.
+
+        Args:
+            cnf: A ``pysat.formula.CNF`` object.
+
+        Returns:
+            A set of integers representing asserted unit-clause literals.
+        """
         return {clause[0] for clause in cnf.clauses if len(clause) == 1}
 
     def _get_unprocessed_hits(self, cnf):
+        """Returns open hits (hit cells not yet covered by a Sunk variable).
+
+        Args:
+            cnf: The agent's CNF knowledge base.
+
+        Returns:
+            A list of (row, col) tuples.
+        """
         return [(r, c) for r in range(self.board_size) for c in range(self.board_size)
                 if get_var(self.board_size, 8, r, c) in self._get_unit_clause_set(cnf) and not _is_cell_in_sunk_ship(self.board_size, cnf, r, c)]
 
     def simulate(self):
+        """Runs the game loop. Must be implemented by subclasses.
+
+        Raises:
+            NotImplementedError: Always, unless overridden.
+        """
         raise NotImplementedError("Subclasses must implement simulate()")
 
     def _all_ships_sunk(self, all_ship_cells):
-        """Returns True if every ship cell has been hit."""
+        """Checks whether every ship cell has been hit.
+
+        Args:
+            all_ship_cells: Set of (row, col) tuples representing all ship cells.
+
+        Returns:
+            True if every cell in ``all_ship_cells`` has been hit.
+        """
         hit_cells = {(r, c) for r, c, was_hit in self.shot_history if was_hit}
         return all_ship_cells.issubset(hit_cells)
 
     def finalize_game(self, all_ship_cells):
+        """Prints final game statistics, visualizes the board, and optionally launches the GUI.
+
+        Args:
+            all_ship_cells: Set of (row, col) tuples representing all ship cells.
+        """
         final_hits = len([h for h in self.shot_history if h[2]])
         print(f"\n📊 Game ended: {final_hits}/{len(all_ship_cells)} ship cells found in {len(self.shot_history)} shots")
         visualize_board(self.board_size, self.truth_board.cnf)
@@ -303,7 +536,13 @@ class BaseSimulateGame:
 
 
 class SimulateSimpleGame(BaseSimulateGame):
+    """Simulation using the simple random neighbor strategy.
+
+    Shoots random neighbors of open hits; falls back to uniformly random shots.
+    """
+
     def simulate(self):
+        """Runs the game loop with ``BattleshipSimpleRandomStrategy``."""
         strategy = BattleshipSimpleRandomStrategy()
         all_ship_cells = {(r, c) for r in range(self.board_size) for c in range(self.board_size)
                           if get_var(self.board_size, 1, r, c) in self._get_unit_clause_set(self.truth_board.cnf)}
@@ -323,7 +562,14 @@ class SimulateSimpleGame(BaseSimulateGame):
 
 
 class SimulateIntelligentGame(BaseSimulateGame):
+    """Simulation using the SAT-guided intelligent strategy.
+
+    Uses the SAT solver to identify forced or consistent ship-part cells near
+    open hits; falls back to uniformly random shots.
+    """
+
     def simulate(self):
+        """Runs the game loop with ``BattleshipIntelligentRandomStrategy``."""
         strategy = BattleshipIntelligentRandomStrategy()
         all_ship_cells = {(r, c) for r in range(self.board_size) for c in range(self.board_size)
                           if get_var(self.board_size, 1, r, c) in self._get_unit_clause_set(self.truth_board.cnf)}
@@ -343,7 +589,14 @@ class SimulateIntelligentGame(BaseSimulateGame):
 
 
 class SimulateCheckerboardIntelligentGame(BaseSimulateGame):
+    """Simulation using the checkerboard + SAT-guided hybrid strategy.
+
+    Uses a checkerboard pattern for discovery and SAT reasoning for hunting
+    damaged ships.
+    """
+
     def simulate(self):
+        """Runs the game loop with ``BattleshipCheckerboardIntelligentStrategy``."""
         strategy = BattleshipCheckerboardIntelligentStrategy()
         all_ship_cells = {(r, c) for r in range(self.board_size) for c in range(self.board_size)
                           if get_var(self.board_size, 1, r, c) in self._get_unit_clause_set(self.truth_board.cnf)}

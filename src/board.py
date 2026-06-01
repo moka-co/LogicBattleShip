@@ -1,10 +1,34 @@
+"""Board initialization and factory classes for the Battleship SAT solver.
+
+Provides helpers to create the base CNF (ShipPart / Empty exclusivity) and two
+factory classes:
+  - ``TruthBoardFactory``: builds the fully-specified truth board with randomly
+    placed ships, used to answer "was this shot a hit?" queries.
+  - ``AgentBoardFactory``: builds the agent's knowledge base *without* placing
+    ships, so the agent must deduce ship locations via SAT reasoning.
+"""
+
 from pysat.formula import CNF
 from src.utils import get_var
 from src.ship_types import *
 from src.ship_logic import *
 
 
-def init_empty_board(board_size = 10):
+def init_empty_board(board_size=10):
+    """Creates a base CNF encoding the ShipPart / Empty exclusivity for every cell.
+
+    For each cell (r, c) on the board, two clauses are added:
+      - ``[SP, E]``   — at least one of ShipPart or Empty is true.
+      - ``[-SP, -E]`` — at most one of ShipPart or Empty is true.
+
+    Together these enforce that every cell is *exactly one* of {ShipPart, Empty}.
+
+    Args:
+        board_size: The side length of the square board (default 10).
+
+    Returns:
+        A ``pysat.formula.CNF`` object containing the base exclusivity clauses.
+    """
     board_cnf = CNF()
 
     for r in range(board_size):
@@ -21,14 +45,31 @@ def init_empty_board(board_size = 10):
 
 
 class TruthBoardFactory:
-    """
-    A factory class responsible for initializing the Battleship game state.
+    """Factory that builds the *truth board* — the fully-specified game state.
 
-    This class sets up the initial CNF formula by placing ships on the board,
-    applying static game rules (shot/hit/miss constraints), and configuring
-    the logic for sinking ships and their consequences.
+    The truth board contains:
+      1. Randomly placed ships (PatrolBoat, Submarine, Battleship, Carrier) with
+         non-adjacency buffers enforced.
+      2. Ship placement and exactly-one constraints.
+      3. Shot / Hit / Miss static constraints.
+      4. Sinking biconditionals and AllPartsSunk consequence constraints.
+
+    The resulting ``self.cnf`` is used by the simulation loop to answer
+    ``is_ship_part`` queries (i.e. whether a shot is a hit or miss).
+
+    Attributes:
+        board_size: Side length of the square board.
+        occupied: Set of (row, col) cells occupied by ships and their adjacency
+            buffers, used during placement to prevent overlaps.
+        cnf: The fully-built ``pysat.formula.CNF`` knowledge base.
     """
+
     def __init__(self, board_size):
+        """Initializes the truth board by placing ships and adding all constraints.
+
+        Args:
+            board_size: The side length of the square board.
+        """
         self.board_size = board_size
         self.occupied = set()
         self.cnf = init_empty_board(self.board_size)
@@ -52,7 +93,25 @@ class TruthBoardFactory:
         self.cnf = add_all_parts_sunk_consequences(self.board_size, self.cnf)
 
 class AgentBoardFactory:
+    """Factory that builds the *agent board* — the agent's knowledge base.
+
+    Unlike ``TruthBoardFactory``, no ships are physically placed. Instead, only
+    the structural constraints are added (placement implications, exactly-one,
+    non-adjacency, shot/hit/miss, sinking, and AllPartsSunk consequences).
+    The agent deduces ship locations by recording shots and querying the SAT
+    solver.
+
+    Attributes:
+        board_size: Side length of the square board.
+        cnf: The ``pysat.formula.CNF`` knowledge base the agent reasons over.
+    """
+
     def __init__(self, board_size):
+        """Initializes the agent board with all structural constraints but no ship placements.
+
+        Args:
+            board_size: The side length of the square board.
+        """
         self.board_size = board_size
         self.cnf = init_empty_board(self.board_size)
         

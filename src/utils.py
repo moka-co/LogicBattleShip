@@ -1,4 +1,8 @@
+"""Utility functions for the Battleship SAT solver.
 
+Provides variable encoding, ship cell computation, and adjacency/forbidden-cell
+helpers used throughout the project.
+"""
 
 
 # Map a unique integer to each cell for each variable type:
@@ -23,10 +27,34 @@
 # 18 = carrier placement (CR_{i,j})
 # 19 = sunk carrier (Sunk_CR_{i,j})
 def get_var(board_size, v_type, r, c):
+    """Encodes a propositional variable as a unique positive integer for PySAT.
+
+    Each (v_type, r, c) triple is mapped to a distinct integer so that the SAT
+    solver can distinguish every variable on the board.
+
+    Args:
+        board_size: The side length of the square board (e.g. 10).
+        v_type: The variable type index (see module-level comment for the mapping).
+        r: Row index (0-based).
+        c: Column index (0-based).
+
+    Returns:
+        A positive integer uniquely identifying this variable.
+    """
     return v_type * (board_size * board_size) + r * board_size + c + 1
 
 def _get_ship_cells(orientation, r, c, length):
-    """Returns the list of cells occupied by a ship of given length/orientation starting at (r,c)."""
+    """Returns the list of (row, col) tuples occupied by a ship.
+
+    Args:
+        orientation: 'h' for horizontal, 'v' for vertical.
+        r: Starting row index.
+        c: Starting column index.
+        length: Number of cells the ship occupies.
+
+    Returns:
+        A list of (row, col) tuples representing the ship's footprint.
+    """
     if orientation == 'h':
         return [(r, c + k) for k in range(length)]
     else:
@@ -34,8 +62,20 @@ def _get_ship_cells(orientation, r, c, length):
 
 
 def _get_forbidden_cells(board_size, cells):
-    """Returns the set of cells that would be adjacent (including diagonals) to a ship occupying `cells`.
-    Used to enforce non-adjacent ship placement when randomly placing ships."""
+    """Returns the set of cells adjacent (including diagonals) to a ship's footprint.
+
+    Used both for random ship placement (to prevent overlapping buffers) and for
+    encoding AllPartsSunk consequence constraints (surrounding cells must be empty).
+
+    Args:
+        board_size: The side length of the square board.
+        cells: An iterable of (row, col) tuples representing the ship's cells.
+
+    Returns:
+        A set of (row, col) tuples that are within bounds and orthogonally or
+        diagonally adjacent to at least one cell in ``cells`` (including the
+        cells themselves).
+    """
     forbidden = set()
     for (r, c) in cells:
         for dr in (-1, 0, 1):

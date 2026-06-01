@@ -1,3 +1,11 @@
+"""Ship logic constraints for the Battleship SAT solver.
+
+Contains functions that encode:
+  - Shot / Hit / Miss relationships and orientation-inference rules.
+  - Sinking biconditionals (conditioned on placement variables).
+  - AllPartsSunk consequence constraints (surrounding cells are empty).
+"""
+
 from src.utils import get_var, _get_ship_cells, _get_forbidden_cells
 
 
@@ -279,11 +287,22 @@ def add_sinking_constraints(board_size, cnf):
 
 
 def add_all_parts_sunk_consequences(board_size, cnf):
-    """Adds the AllPartsSunk consequence constraints.
+    """Adds AllPartsSunk consequence constraints for every ship type and position.
 
     Once a ship is fully sunk, the surrounding tiles (adjacent + diagonals) are
-    known to be empty (¬SP). Each consequence Sunk_X -> (¬SP_a ∧ ¬SP_b ∧ ...) is
-    encoded as one binary clause per surrounding cell: [-Sunk_X, -SP_a].
+    known to be empty (¬SP). Each consequence ``Sunk_X -> (¬SP_a ∧ ¬SP_b ∧ ...)``
+    is encoded as one binary clause per surrounding cell: ``[-Sunk_X, -SP_a]``.
+
+    This allows the SAT solver to propagate emptiness around sunk ships, which
+    in turn eliminates those cells from future hunt candidates and can force
+    deductions about remaining ship placements.
+
+    Args:
+        board_size: The side length of the square board.
+        cnf: The CNF formula to append clauses to.
+
+    Returns:
+        The same CNF object with the new clauses appended.
 
     Surrounding cells per README:
       - PB horizontal at (i,j):   (i, j-1), (i, j+2), (i-1, j), (i-1, j+1),
@@ -301,7 +320,12 @@ def add_all_parts_sunk_consequences(board_size, cnf):
     """
 
     def _add_neg_sp(sunk_var, neighbors):
-        """Helper: for each (r,c) in `neighbors` that is in bounds, append [-sunk, -SP_{r,c}]."""
+        """Appends ``[-sunk_var, -SP_{r,c}]`` for each in-bounds neighbor.
+
+        Args:
+            sunk_var: The integer SAT variable for the Sunk predicate.
+            neighbors: Iterable of (row, col) tuples to constrain as empty.
+        """
         for (nr, nc) in neighbors:
             if 0 <= nr < board_size and 0 <= nc < board_size:
                 cnf.append([-sunk_var, -get_var(board_size, 1, nr, nc)])
