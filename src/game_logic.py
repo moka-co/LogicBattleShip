@@ -1,5 +1,6 @@
 import random
 from pysat.solvers import Glucose3
+import board
 from src.board import init_empty_board
 from src.ship_types import *
 from src.ship_logic import *
@@ -623,11 +624,7 @@ def simulate_game(board_size, shots, truth_board, agent_board, use_gui=False):
 
 
 class SimulateSimpleGame:
-    def __init__(self, board_size, shots, truth_board, agent_board, use_gui=False):
-        self._simulate_game(board_size, shots, truth_board, agent_board, use_gui)
-    
-    def _simulate_game(self, board_size, shots, truth_board, agent_board, use_gui=False):
-        """Run a simulation: random by default, switching to SAT-based hunting after a hit.
+    """Run a simulation: random by default, switching to SAT-based hunting after a hit.
 
         Behavior:
           - Default mode: pick a random unshot cell.
@@ -635,14 +632,30 @@ class SimulateSimpleGame:
             until no more candidates exist or all ships are sunk.
           - Only revert to random shooting when no hunt targets are available.
           - Game ends early if all ships are sunk.
-        """
+    """
+
+    def __init__(self, board_size, shots, truth_board, agent_board, use_gui=False):
+        self.board_size = board_size
+        self.truth_board = agent_board
+        self.agent_board = truth_board
+
+        self.shots_taken = set()
+        self.shot_history = []
+        self.hunt_candidates = []  # Persistent list of hunting candidates
+
+        # Run simulate game function
+        self._simulate_game(board_size, shots, truth_board, agent_board, use_gui)
+    
+    
+    def _get_unit_clause_set(self, cnf):
+        """Returns the set of asserted literals (unit clauses) in the CNF."""
+        return {clause[0] for clause in cnf.clauses if len(clause) == 1}
+
+    def _simulate_game(self, board_size, shots, truth_board, agent_board, use_gui=False):
+
         # Visualize board before shots
         print("Board from the POV of the Truth")
         visualize_board(board_size, truth_board.cnf)
-
-        shots_taken = set()
-        shot_history = []
-        hunt_candidates = []  # Persistent list of hunting candidates
         
         # Get all ship positions from truth board for win condition check
         truth_unit_clauses = _get_unit_clause_set(truth_board.cnf)
@@ -660,18 +673,18 @@ class SimulateSimpleGame:
                          if get_var(board_size, 8, r, c) in agent_unit_clauses}
             
             if all_ship_cells.issubset(hit_cells):
-                print(f"\n🎉 VICTORY! All ships sunk in {len(shot_history)} shots!")
+                print(f"\n🎉 VICTORY! All ships sunk in {len(self.shot_history)} shots!")
                 break
 
             # Update hunt candidates based on current unprocessed hits
             unprocessed_hits = _get_unprocessed_hits(board_size, agent_board.cnf)
             if unprocessed_hits:
                 # Get fresh candidates and merge with existing ones
-                new_candidates = get_simple_hunt_targets(board_size, agent_board.cnf, shots_taken)
+                new_candidates = get_simple_hunt_targets(board_size, agent_board.cnf, self.shots_taken)
                 # Remove already shot candidates and add new ones
-                hunt_candidates = [c for c in hunt_candidates if c not in shots_taken]
+                hunt_candidates = [c for c in self.hunt_candidates if c not in self.shots_taken]
                 for candidate in new_candidates:
-                    if candidate not in hunt_candidates and candidate not in shots_taken:
+                    if candidate not in hunt_candidates and candidate not in self.shots_taken:
                         hunt_candidates.append(candidate)
             else:
                 # No unprocessed hits, clear hunt candidates
@@ -686,7 +699,7 @@ class SimulateSimpleGame:
             # Fallback to random if no hunting target was found
             if not target:
                 unshot = [(r, c) for r in range(board_size) for c in range(board_size)
-                          if (r, c) not in shots_taken]
+                          if (r, c) not in self.shots_taken]
                 if not unshot:
                     print("All cells have been shot.")
                     break
@@ -697,25 +710,25 @@ class SimulateSimpleGame:
                     print(f"Shot {shot_num}: Random target: {target}")
 
             r, c = target
-            shots_taken.add((r, c))
+            self.shots_taken.add((r, c))
 
             was_hit = is_ship_part(board_size, truth_board.cnf, r, c)
             record_shot(board_size, agent_board.cnf, r, c, was_hit)
-            shot_history.append((r, c, was_hit))
+            self.shot_history.append((r, c, was_hit))
             
             hit_status = "HIT! 🎯" if was_hit else "Miss"
             print(f"  Result: ({r}, {c}) - {hit_status}")
             
             # Show progress
-            current_hits = len([h for h in shot_history if h[2]])
+            current_hits = len([h for h in self.shot_history if h[2]])
             print(f"  Progress: {current_hits}/{len(all_ship_cells)} ship cells found")
 
         # Final status
-        final_hits = len([h for h in shot_history if h[2]])
+        final_hits = len([h for h in self.shot_history if h[2]])
         if final_hits == len(all_ship_cells):
-            print(f"\n🏆 GAME WON! All {len(all_ship_cells)} ship cells destroyed in {len(shot_history)} shots!")
+            print(f"\n🏆 GAME WON! All {len(all_ship_cells)} ship cells destroyed in {len(self.shot_history)} shots!")
         else:
-            print(f"\n📊 Game ended: {final_hits}/{len(all_ship_cells)} ship cells found in {len(shot_history)} shots")
+            print(f"\n📊 Game ended: {final_hits}/{len(all_ship_cells)} ship cells found in {len(self.shot_history)} shots")
 
         # Visualize board after shots
         print("\n" + "="*50)
@@ -727,4 +740,4 @@ class SimulateSimpleGame:
         visualize_board(board_size, agent_board.cnf)
 
         if use_gui:
-            run_gui(board_size, truth_board.cnf, shot_history)
+            run_gui(board_size, truth_board.cnf, self.shot_history)
