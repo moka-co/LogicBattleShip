@@ -296,7 +296,7 @@ def get_intelligent_hunt_targets(board_size, cnf, shots_taken):
     for (hr, hc) in unprocessed_hits:
         # Find adjacent hits to determine orientation
         adjacent_horizontal = []
-        adjacent_vertical = []
+        adjacent_vertical = [] 
         
         # Check for immediately adjacent hits (distance 1)
         for dc in [-1, 1]:
@@ -449,7 +449,7 @@ def simulate_game_intelligent(board_size, shots, truth_board, agent_board, use_g
             break
 
         # Try intelligent hunting first if there are unprocessed hits
-        unprocessed_hits = _get_unprocessed_hits(board_size, agent_board.cnf)
+        unprocessed_hits = _get_unprocessed_hits(board_size, agent_board.cnf) 
         if unprocessed_hits:
             candidates = get_intelligent_hunt_targets(board_size, agent_board.cnf, shots_taken)
             if candidates:
