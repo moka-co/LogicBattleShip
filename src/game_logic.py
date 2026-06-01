@@ -1,12 +1,14 @@
 import random
 from pysat.solvers import Glucose3
-import board
-from src.board import init_empty_board
 from src.ship_types import *
 from src.ship_logic import *
 from src.utils import *
 from src.gui import run_gui
 
+
+def _get_unprocessed_hits(cnf, board_size):
+        return [(r, c) for r in range(board_size) for c in range(board_size)
+                if get_var(board_size, 8, r, c) in _get_unit_clause_set(cnf) and not _is_cell_in_sunk_ship(board_size, cnf, r, c)]
 
 def record_shot(board_size, cnf, r, c, was_hit):
     """Records a shot outcome by appending unit clauses to the CNF."""
