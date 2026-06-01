@@ -96,7 +96,10 @@ def get_simple_hunt_targets(board_size, cnf, shots_taken):
     candidates = []
     seen = set()
     for (hr, hc) in unprocessed_hits:
-        neighbors = [(hr - 1, hc), (hr + 1, hc), (hr, hc - 1), (hr, hc + 1)]
+        neighbors = [
+            (hr - 1, hc), (hr + 1, hc), (hr, hc - 1), (hr, hc + 1),
+            (hr - 1, hc - 1), (hr - 1, hc + 1), (hr + 1, hc - 1), (hr + 1, hc + 1)
+        ]
         for (nr, nc) in neighbors:
             if not (0 <= nr < board_size and 0 <= nc < board_size):
                 continue
@@ -150,7 +153,11 @@ def get_intelligent_hunt_targets(board_size, cnf, shots_taken):
                     if min_r - 1 >= 0 and (min_r - 1, hc) not in shots_taken: candidates.append((min_r - 1, hc))
                     if max_r + 1 < board_size and (max_r + 1, hc) not in shots_taken: candidates.append((max_r + 1, hc))
         else:
-            for nr, nc, d in [(hr - 1, hc, 'up'), (hr + 1, hc, 'down'), (hr, hc - 1, 'left'), (hr, hc + 1, 'right')]:
+            neighbors = [
+                (hr - 1, hc), (hr + 1, hc), (hr, hc - 1), (hr, hc + 1),
+                (hr - 1, hc - 1), (hr - 1, hc + 1), (hr + 1, hc - 1), (hr + 1, hc + 1)
+            ]
+            for nr, nc in neighbors:
                 if 0 <= nr < board_size and 0 <= nc < board_size and (nr, nc) not in shots_taken:
                     candidates.append((nr, nc))
         for nr, nc in candidates:
