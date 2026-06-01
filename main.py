@@ -1,6 +1,6 @@
 import argparse
 from src.board import TruthBoardFactory, AgentBoardFactory
-from src.game_logic import SimulateSimpleGame, SimulateIntelligentGame
+from src.game_logic import SimulateSimpleGame, SimulateIntelligentGame, SimulateCheckerboardIntelligentGame
 
 def main():
     parser = argparse.ArgumentParser(description="Battleship SAT Solver")
@@ -23,9 +23,9 @@ def main():
     )
     parser.add_argument(
         "--strategy",
-        choices=["simple", "intelligent"],
+        choices=["simple", "intelligent", "checkerboard"],
         default="simple",
-        help="Hunting strategy: 'simple' (random neighbors) or 'intelligent' (directional hunting) (default: simple)"
+        help="Hunting strategy: 'simple' (random neighbors), 'intelligent' (directional hunting), or 'checkerboard' (checkerboard search + intelligent hunting) (default: simple)"
     )
     args = parser.parse_args()
     
@@ -37,6 +37,8 @@ def main():
     
     if args.strategy == "intelligent":
         SimulateIntelligentGame(args.size, args.shots, truth_board=truth_board, agent_board=agent_board, use_gui=args.gui)
+    elif args.strategy == "checkerboard":
+        SimulateCheckerboardIntelligentGame(args.size, args.shots, truth_board=truth_board, agent_board=agent_board, use_gui=args.gui)
     else:
         SimulateSimpleGame(args.size, args.shots, truth_board=truth_board, agent_board=agent_board, use_gui=args.gui)
 

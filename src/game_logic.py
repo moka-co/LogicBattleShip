@@ -144,6 +144,20 @@ def get_intelligent_hunt_targets(board_size, cnf, shots_taken):
     return candidates
 
 
+def get_checkerboard_targets(board_size, shots_taken):
+    """Returns a list of unshot cells in a checkerboard pattern with spacing of 2.
+    
+    The pattern targets cells where (r + c) is even, ensuring that any ship of
+    length >= 2 must overlap at least one of these cells.
+    """
+    candidates = []
+    for r in range(board_size):
+        for c in range(board_size):
+            if (r + c) % 2 == 0 and (r, c) not in shots_taken:
+                candidates.append((r, c))
+    return candidates
+
+
 class BattleshipStrategy:
     def get_hunt_candidates(self, board_size, cnf, shots_taken):
         raise NotImplementedError
@@ -172,6 +186,31 @@ class BattleshipIntelligentRandomStrategy(BattleshipStrategy):
             if not unshot: return None, False
             target = random.choice(unshot)
             
+        return target, True
+
+
+class BattleshipCheckerboardIntelligentStrategy(BattleshipStrategy):
+    """Strategy that uses a checkerboard search pattern until a ship part is hit,
+    then switches to intelligent hunt targets to finish off the ship.
+    """
+    def get_hunt_candidates(self, board_size, cnf, shots_taken):
+        # If there are unprocessed hits (ship struck but not sunk), use intelligent hunting
+        hunt_candidates = get_intelligent_hunt_targets(board_size, cnf, shots_taken)
+        if hunt_candidates:
+            target = random.choice(hunt_candidates)
+            return target, True
+        
+        # Otherwise, search using a checkerboard pattern
+        checkerboard_candidates = get_checkerboard_targets(board_size, shots_taken)
+        if checkerboard_candidates:
+            target = random.choice(checkerboard_candidates)
+            return target, True
+        
+        # Fallback: pick any unshot cell
+        unshot = [(r, c) for r in range(board_size) for c in range(board_size) if (r, c) not in shots_taken]
+        if not unshot:
+            return None, False
+        target = random.choice(unshot)
         return target, True
 
 
@@ -224,6 +263,23 @@ class SimulateSimpleGame(BaseSimulateGame):
 class SimulateIntelligentGame(BaseSimulateGame):
     def simulate(self):
         strategy = BattleshipIntelligentRandomStrategy()
+        all_ship_cells = {(r, c) for r in range(self.board_size) for c in range(self.board_size)
+                          if get_var(self.board_size, 1, r, c) in self._get_unit_clause_set(self.truth_board.cnf)}
+        
+        for shot_num in range(1, self.shots + 1):
+            target, active = strategy.get_hunt_candidates(self.board_size, self.agent_board.cnf, self.shots_taken)
+            if not active or target is None: break
+            self.shots_taken.add(target)
+            r, c = target
+            was_hit = is_ship_part(self.board_size, self.truth_board.cnf, r, c)
+            record_shot(self.board_size, self.agent_board.cnf, r, c, was_hit)
+            self.shot_history.append((r, c, was_hit))
+        self.finalize_game(all_ship_cells)
+
+
+class SimulateCheckerboardIntelligentGame(BaseSimulateGame):
+    def simulate(self):
+        strategy = BattleshipCheckerboardIntelligentStrategy()
         all_ship_cells = {(r, c) for r in range(self.board_size) for c in range(self.board_size)
                           if get_var(self.board_size, 1, r, c) in self._get_unit_clause_set(self.truth_board.cnf)}
         
