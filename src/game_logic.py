@@ -217,6 +217,267 @@ def get_simple_hunt_targets(board_size, cnf, shots_taken):
     return candidates
 
 
+def _get_sunk_ships_status(board_size, cnf):
+    """Returns a dictionary indicating which ship types have been sunk.
+    
+    Returns:
+        dict: {'patrol_boat': bool, 'submarine': bool}
+    """
+    unit_clauses = _get_unit_clause_set(cnf)
+    
+    # Check if any patrol boat sunk variable is asserted
+    patrol_boat_sunk = False
+    for r in range(board_size):
+        for c in range(board_size - 1):  # PB horizontal
+            if get_var(board_size, 10, r, c) in unit_clauses:
+                patrol_boat_sunk = True
+                break
+        if patrol_boat_sunk:
+            break
+        for c in range(board_size):
+            if r < board_size - 1:  # PB vertical
+                if get_var(board_size, 11, r, c) in unit_clauses:
+                    patrol_boat_sunk = True
+                    break
+        if patrol_boat_sunk:
+            break
+    
+    # Check if any submarine sunk variable is asserted
+    submarine_sunk = False
+    for r in range(board_size):
+        for c in range(board_size - 2):  # SM horizontal
+            if get_var(board_size, 12, r, c) in unit_clauses:
+                submarine_sunk = True
+                break
+        if submarine_sunk:
+            break
+        for c in range(board_size):
+            if r < board_size - 2:  # SM vertical
+                if get_var(board_size, 13, r, c) in unit_clauses:
+                    submarine_sunk = True
+                    break
+        if submarine_sunk:
+            break
+    
+    return {'patrol_boat': patrol_boat_sunk, 'submarine': submarine_sunk}
+
+
+def get_intelligent_hunt_targets(board_size, cnf, shots_taken):
+    """Returns a list of candidate (r,c) cells using intelligent directional hunting.
+
+    Intelligent Algorithm:
+      1. Check which ships have been sunk (patrol boat vs submarine)
+      2. Find all unprocessed hits (hits not covered by sunk ships)
+      3. For each unprocessed hit, determine likely ship orientation and length
+      4. Prioritize shots in the most likely direction based on:
+         - Which ships are still alive (1x2 patrol boat vs 1x3 submarine)
+         - Hit patterns that suggest horizontal vs vertical orientation
+         - Adjacent hits that form lines
+    """
+    unprocessed_hits = _get_unprocessed_hits(board_size, cnf)
+    if not unprocessed_hits:
+        return []
+
+    sunk_status = _get_sunk_ships_status(board_size, cnf)
+    unit_clauses = _get_unit_clause_set(cnf)
+    
+    # Get all current hits for pattern analysis
+    all_hits = {(r, c) for r in range(board_size) for c in range(board_size)
+                if get_var(board_size, 8, r, c) in unit_clauses}
+    
+    candidates = []
+    seen = set()
+
+    print(f"  Ship status: Patrol Boat sunk={sunk_status['patrol_boat']}, Submarine sunk={sunk_status['submarine']}")
+    
+    for (hr, hc) in unprocessed_hits:
+        # Analyze hit patterns around this hit to determine likely orientation
+        horizontal_hits = []
+        vertical_hits = []
+        
+        # Check for adjacent hits in horizontal direction
+        for dc in [-2, -1, 1, 2]:
+            if 0 <= hc + dc < board_size and (hr, hc + dc) in all_hits:
+                horizontal_hits.append((hr, hc + dc))
+        
+        # Check for adjacent hits in vertical direction  
+        for dr in [-2, -1, 1, 2]:
+            if 0 <= hr + dr < board_size and (hr + dr, hc) in all_hits:
+                vertical_hits.append((hr + dr, hc))
+        
+        # Determine target ship length based on what's still alive
+        target_lengths = []
+        if not sunk_status['patrol_boat']:
+            target_lengths.append(2)  # Looking for 1x2 patrol boat
+        if not sunk_status['submarine']:
+            target_lengths.append(3)  # Looking for 1x3 submarine
+        
+        # If no ships left to find, shouldn't happen but fallback
+        if not target_lengths:
+            target_lengths = [2, 3]
+        
+        print(f"    Analyzing hit at ({hr}, {hc}): horizontal_hits={horizontal_hits}, vertical_hits={vertical_hits}")
+        print(f"    Target lengths: {target_lengths}")
+        
+        # Prioritize directions based on existing hit patterns and target ship lengths
+        direction_priorities = []
+        
+        # If we have horizontal hits, prioritize horizontal expansion
+        if horizontal_hits:
+            # Find the extent of horizontal hits
+            min_c = min(hc, min(c for r, c in horizontal_hits))
+            max_c = max(hc, max(c for r, c in horizontal_hits))
+            current_length = max_c - min_c + 1
+            
+            # Add horizontal neighbors if we haven't reached target length
+            for target_len in target_lengths:
+                if current_length < target_len:
+                    # Try to extend left
+                    if min_c - 1 >= 0:
+                        direction_priorities.append(('horizontal', hr, min_c - 1, target_len))
+                    # Try to extend right
+                    if max_c + 1 < board_size:
+                        direction_priorities.append(('horizontal', hr, max_c + 1, target_len))
+        
+        # If we have vertical hits, prioritize vertical expansion
+        if vertical_hits:
+            # Find the extent of vertical hits
+            min_r = min(hr, min(r for r, c in vertical_hits))
+            max_r = max(hr, max(r for r, c in vertical_hits))
+            current_length = max_r - min_r + 1
+            
+            # Add vertical neighbors if we haven't reached target length
+            for target_len in target_lengths:
+                if current_length < target_len:
+                    # Try to extend up
+                    if min_r - 1 >= 0:
+                        direction_priorities.append(('vertical', min_r - 1, hc, target_len))
+                    # Try to extend down
+                    if max_r + 1 < board_size:
+                        direction_priorities.append(('vertical', max_r + 1, hc, target_len))
+        
+        # If no clear pattern yet, try all 4 directions with preference for longer ships first
+        if not horizontal_hits and not vertical_hits:
+            for target_len in sorted(target_lengths, reverse=True):  # Longer ships first
+                # Horizontal directions
+                direction_priorities.append(('horizontal', hr, hc - 1, target_len))
+                direction_priorities.append(('horizontal', hr, hc + 1, target_len))
+                # Vertical directions  
+                direction_priorities.append(('vertical', hr - 1, hc, target_len))
+                direction_priorities.append(('vertical', hr + 1, hc, target_len))
+        
+        # Add candidates based on priorities
+        for direction, nr, nc, target_len in direction_priorities:
+            # Check bounds
+            if not (0 <= nr < board_size and 0 <= nc < board_size):
+                continue
+            # Skip if already shot or already added to candidates
+            if (nr, nc) in shots_taken or (nr, nc) in seen:
+                continue
+            
+            seen.add((nr, nc))
+            candidates.append((nr, nc))
+            print(f"      Added {direction} target at ({nr}, {nc}) for length {target_len}")
+
+    print(f"  Intelligent hunt targets for unprocessed hits {unprocessed_hits}: {candidates}")
+    return candidates
+
+
+def simulate_game_intelligent(board_size, shots, truth_board, agent_board, use_gui=False):
+    """Run a simulation using intelligent directional hunting strategy.
+
+    Behavior:
+      - Default mode: pick a random unshot cell.
+      - After a hit, switch to "intelligent hunting" mode that:
+        * Tracks which ships have been sunk (patrol boat vs submarine)
+        * Analyzes hit patterns to determine likely ship orientation
+        * Prioritizes shots based on remaining ship types and lengths
+        * Uses directional shooting along likely ship axes
+      - Game ends early if all ships are sunk.
+    """
+    # Visualize board before shots
+    print("Board from the POV of the Truth")
+    visualize_board(board_size, truth_board.cnf)
+
+    shots_taken = set()
+    shot_history = []
+    
+    # Get all ship positions from truth board for win condition check
+    truth_unit_clauses = _get_unit_clause_set(truth_board.cnf)
+    all_ship_cells = {(r, c) for r in range(board_size) for c in range(board_size)
+                      if get_var(board_size, 1, r, c) in truth_unit_clauses}
+    
+    print(f"Total ship cells to find: {len(all_ship_cells)}")
+
+    for shot_num in range(1, shots + 1):
+        target = None
+
+        # Check win condition - all ships sunk
+        agent_unit_clauses = _get_unit_clause_set(agent_board.cnf)
+        hit_cells = {(r, c) for r in range(board_size) for c in range(board_size)
+                     if get_var(board_size, 8, r, c) in agent_unit_clauses}
+        
+        if all_ship_cells.issubset(hit_cells):
+            print(f"\n🎉 VICTORY! All ships sunk in {len(shot_history)} shots!")
+            break
+
+        # Try intelligent hunting first if there are unprocessed hits
+        unprocessed_hits = _get_unprocessed_hits(board_size, agent_board.cnf)
+        if unprocessed_hits:
+            candidates = get_intelligent_hunt_targets(board_size, agent_board.cnf, shots_taken)
+            if candidates:
+                target = candidates[0]  # Take highest priority target
+                print(f"Shot {shot_num}: Intelligent hunting target: {target} (hunting around unprocessed hits: {unprocessed_hits})")
+
+        # Fallback to random if no hunting target was found.
+        if not target:
+            unshot = [(r, c) for r in range(board_size) for c in range(board_size)
+                      if (r, c) not in shots_taken]
+            if not unshot:
+                print("All cells have been shot.")
+                break
+            target = random.choice(unshot)
+            if unprocessed_hits:
+                print(f"Shot {shot_num}: Random target: {target} (no valid hunt targets found, but unprocessed hits remain: {unprocessed_hits})")
+            else:
+                print(f"Shot {shot_num}: Random target: {target}")
+
+        r, c = target
+        shots_taken.add((r, c))
+
+        was_hit = is_ship_part(board_size, truth_board.cnf, r, c)
+        record_shot(board_size, agent_board.cnf, r, c, was_hit)
+        shot_history.append((r, c, was_hit))
+        
+        hit_status = "HIT! 🎯" if was_hit else "Miss"
+        print(f"  Result: ({r}, {c}) - {hit_status}")
+        
+        # Show progress
+        current_hits = len([h for h in shot_history if h[2]])
+        print(f"  Progress: {current_hits}/{len(all_ship_cells)} ship cells found")
+
+    # Final status
+    final_hits = len([h for h in shot_history if h[2]])
+    if final_hits == len(all_ship_cells):
+        print(f"\n🏆 GAME WON! All {len(all_ship_cells)} ship cells destroyed in {len(shot_history)} shots!")
+    else:
+        print(f"\n📊 Game ended: {final_hits}/{len(all_ship_cells)} ship cells found in {len(shot_history)} shots")
+
+    # Visualize board after shots
+    print("\n" + "="*50)
+    print("FINAL BOARDS:")
+    print("="*50)
+    print("Truth board (actual ship positions):")
+    visualize_board(board_size, truth_board.cnf)
+    print("\nAgent board (discovered information):")
+    visualize_board(board_size, agent_board.cnf)
+
+    if use_gui:
+        run_gui(board_size, truth_board.cnf, shot_history)
+
+    return truth_board.cnf
+
+
 def simulate_game(board_size, shots, truth_board, agent_board, use_gui=False):
     """Run a simulation: random by default, switching to SAT-based hunting after a hit.
 
