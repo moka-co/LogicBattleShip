@@ -529,7 +529,7 @@ class BaseSimulateGame:
             all_ship_cells: Set of (row, col) tuples representing all ship cells.
         """
         final_hits = len([h for h in self.shot_history if h[2]])
-        print(f"\n📊 Game ended: {final_hits}/{len(all_ship_cells)} ship cells found in {len(self.shot_history)} shots")
+        print(f"\nGame ended: {final_hits}/{len(all_ship_cells)} ship cells found in {len(self.shot_history)} shots")
         visualize_board(self.board_size, self.truth_board.cnf)
         if self.use_gui:
             run_gui(self.board_size, self.truth_board.cnf, self.shot_history)

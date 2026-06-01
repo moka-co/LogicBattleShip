@@ -73,7 +73,7 @@ class AgentVsAgent:
         self.ship_cells_1 = self._get_all_ship_cells(self.truth_board_1)
         self.ship_cells_2 = self._get_all_ship_cells(self.truth_board_2)
 
-        print(f"⚔️  Agent vs Agent — Board: {board_size}x{board_size}, Max shots: {max_shots}")
+        print(f"Agent vs Agent — Board: {board_size}x{board_size}, Max shots: {max_shots}")
         print(f"   Agent 1 strategy: {strategy_name_1} ({len(self.ship_cells_1)} ship cells)")
         print(f"   Agent 2 strategy: {strategy_name_2} ({len(self.ship_cells_2)} ship cells)")
         print()
@@ -134,8 +134,8 @@ class AgentVsAgent:
         record_shot(self.board_size, agent_board.cnf, r, c, was_hit)
         shot_history.append((r, c, was_hit))
 
-        status = "💥 HIT" if was_hit else "🌊 miss"
-        print(f"  {agent_name} fires at ({r},{c}) → {status}")
+        status = "HIT" if was_hit else "miss"
+        print(f"  {agent_name} fires at ({r},{c}) — {status}")
 
         if was_hit and self._all_sunk(opponent_ship_cells, shot_history):
             return True
@@ -152,7 +152,7 @@ class AgentVsAgent:
                 self.truth_board_2, self.shots_taken_1, self.shot_history_1,
                 self.ship_cells_2
             ):
-                print(f"\n🏆 Agent 1 wins in {len(self.shot_history_1)} shots!")
+                print(f"\nAgent 1 wins in {len(self.shot_history_1)} shots!")
                 self._print_summary()
                 return
 
@@ -162,11 +162,11 @@ class AgentVsAgent:
                 self.truth_board_1, self.shots_taken_2, self.shot_history_2,
                 self.ship_cells_1
             ):
-                print(f"\n🏆 Agent 2 wins in {len(self.shot_history_2)} shots!")
+                print(f"\nAgent 2 wins in {len(self.shot_history_2)} shots!")
                 self._print_summary()
                 return
 
-        print(f"\n⏰ Max shots ({self.max_shots}) reached — no winner!")
+        print(f"\nMax shots ({self.max_shots}) reached — no winner!")
         self._print_summary()
 
     def _print_summary(self):
@@ -174,7 +174,7 @@ class AgentVsAgent:
         hits_1 = len([h for h in self.shot_history_1 if h[2]])
         hits_2 = len([h for h in self.shot_history_2 if h[2]])
 
-        print(f"\n📊 Final Summary:")
+        print(f"\nFinal Summary:")
         print(f"   Agent 1: {hits_1}/{len(self.ship_cells_2)} hits in {len(self.shot_history_1)} shots "
               f"(accuracy: {hits_1/max(len(self.shot_history_1),1)*100:.1f}%)")
         print(f"   Agent 2: {hits_2}/{len(self.ship_cells_1)} hits in {len(self.shot_history_2)} shots "
