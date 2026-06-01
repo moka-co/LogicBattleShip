@@ -1,5 +1,6 @@
 import argparse
-from src.game_logic import TruthBoardFactory, AgentBoardFactory, simulate_game, simulate_game_intelligent
+from src.board import TruthBoardFactory, AgentBoardFactory
+from src.game_logic import simulate_game, simulate_game_intelligent, SimulateSimpleGame
 
 def main():
     parser = argparse.ArgumentParser(description="Battleship SAT Solver")
@@ -37,7 +38,8 @@ def main():
     if args.strategy == "intelligent":
         return simulate_game_intelligent(args.size, args.shots, truth_board=truth_board, agent_board=agent_board, use_gui=args.gui)
     else:
-        return simulate_game(args.size, args.shots, truth_board=truth_board, agent_board=agent_board, use_gui=args.gui)
+        return SimulateSimpleGame(args.size, args.shots, truth_board=truth_board, agent_board=agent_board, use_gui=args.gui)
+        #return simulate_game(args.size, args.shots, truth_board=truth_board, agent_board=agent_board, use_gui=args.gui)
 
 
 if __name__ == "__main__":

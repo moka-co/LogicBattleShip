@@ -1,6 +1,28 @@
 import pygame
 import time
+from src.utils import get_var
 
+def visualize_board(board_size, cnf):
+    """Prints a simple text representation of the board."""
+    print("Board Visualization:")
+    # Create a set of unit clauses for faster lookup
+    unit_clauses = {c[0] for c in cnf.clauses if len(c) == 1}
+    
+    for r in range(board_size):
+        row_str = ""
+        for c in range(board_size):
+            # Check for Hit (8), Ship Part (1), or Miss (9)
+            if get_var(board_size, 8, r, c) in unit_clauses:
+                row_str += "[H]"
+            elif get_var(board_size, 1, r, c) in unit_clauses:
+                row_str += "[S]"
+            elif get_var(board_size, 9, r, c) in unit_clauses:
+                row_str += "[0]"
+            else:
+                row_str += "[ ]"
+        print(row_str)
+
+# PyGame GUI
 def run_gui(board_size, cnf, shot_history):
     """Pygame visualization of the board state with step-by-step animation."""
     pygame.init()
