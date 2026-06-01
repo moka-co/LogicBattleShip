@@ -197,7 +197,7 @@ class SimulateSimpleGame(BaseSimulateGame):
         
         for shot_num in range(1, self.shots + 1):
             target, active = strategy.get_hunt_candidates(self.board_size, self.agent_board.cnf, self.shots_taken)
-            if not active: break
+            if not active or target is None: break
             self.shots_taken.add(target)
             r, c = target
             was_hit = is_ship_part(self.board_size, self.truth_board.cnf, r, c)
@@ -217,6 +217,7 @@ class SimulateIntelligentGame(BaseSimulateGame):
                 unshot = [(r, c) for r in range(self.board_size) for c in range(self.board_size) if (r, c) not in self.shots_taken]
                 if not unshot: break
                 target = random.choice(unshot)
+            if target is None: break
             self.shots_taken.add(target)
             r, c = target
             was_hit = is_ship_part(self.board_size, self.truth_board.cnf, r, c)
