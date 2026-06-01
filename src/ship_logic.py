@@ -84,6 +84,72 @@ def add_shot_hit_miss_constraints(board_size, cnf):
             if len(disjuncts) > 3:
                 cnf.append(disjuncts)
 
+    # 6. Submarine orientation inference (similar to PatrolBoat):
+    # If Hit_{i,j} and both horizontal neighbors are Miss, then the ship at (i,j)
+    # cannot be a horizontal submarine, and must be a vertical submarine.
+    # Formula: (Hit_{i,j} ∧ Miss_{i,j-1} ∧ Miss_{i,j+1}) ->
+    #          (¬SM_{h,i-2,j} ∧ ¬SM_{h,i-1,j} ∧ ¬SM_{h,i,j} ∧ (SM_{v,i-2,j} ∨ SM_{v,i-1,j} ∨ SM_{v,i,j}))
+    for r in range(board_size):
+        for c in range(board_size):
+            # Horizontal-misses pattern requires both j-1 and j+1 to be in bounds
+            if c - 1 < 0 or c + 1 >= board_size:
+                continue
+
+            hit = get_var(board_size, 8, r, c)
+            miss_left = get_var(board_size, 9, r, c - 1)
+            miss_right = get_var(board_size, 9, r, c + 1)
+
+            # Conclusion: ¬SM_{h,*,j} for all possible horizontal submarines covering (r,c)
+            # SM_{h,r',c'} covers cells (r', c'), (r', c'+1), (r', c'+2)
+            # So (r,c) is covered by SM_{h,r,c-2}, SM_{h,r,c-1}, SM_{h,r,c}
+            for c_start in [c - 2, c - 1, c]:
+                if 0 <= c_start <= board_size - 3:  # SM horizontal needs c_start+2 in bounds
+                    sm_h = get_var(board_size, 5, r, c_start)
+                    cnf.append([-hit, -miss_left, -miss_right, -sm_h])
+
+            # Conclusion: SM_{v,r',c} for possible vertical submarines
+            # SM_{v,r',c} covers cells (r', c), (r'+1, c), (r'+2, c)
+            # So (r,c) can be covered by SM_{v,r-2,c}, SM_{v,r-1,c}, SM_{v,r,c}
+            disjuncts = [-hit, -miss_left, -miss_right]
+            for r_start in [r - 2, r - 1, r]:
+                if 0 <= r_start <= board_size - 3:  # SM vertical needs r_start+2 in bounds
+                    disjuncts.append(get_var(board_size, 6, r_start, c))
+            
+            # Only emit if at least one vertical option is feasible
+            if len(disjuncts) > 3:
+                cnf.append(disjuncts)
+
+    # 7. Vertical orientation inference for submarines:
+    # If Hit_{i,j} and both vertical neighbors are Miss, then the ship at (i,j)
+    # cannot be a vertical submarine, and must be a horizontal submarine.
+    # Formula: (Hit_{i,j} ∧ Miss_{i-1,j} ∧ Miss_{i+1,j}) ->
+    #          (¬SM_{v,i-2,j} ∧ ¬SM_{v,i-1,j} ∧ ¬SM_{v,i,j} ∧ (SM_{h,i,j-2} ∨ SM_{h,i,j-1} ∨ SM_{h,i,j}))
+    for r in range(board_size):
+        for c in range(board_size):
+            # Vertical-misses pattern requires both r-1 and r+1 to be in bounds
+            if r - 1 < 0 or r + 1 >= board_size:
+                continue
+
+            hit = get_var(board_size, 8, r, c)
+            miss_up = get_var(board_size, 9, r - 1, c)
+            miss_down = get_var(board_size, 9, r + 1, c)
+
+            # Conclusion: ¬SM_{v,*,j} for all possible vertical submarines covering (r,c)
+            for r_start in [r - 2, r - 1, r]:
+                if 0 <= r_start <= board_size - 3:  # SM vertical needs r_start+2 in bounds
+                    sm_v = get_var(board_size, 6, r_start, c)
+                    cnf.append([-hit, -miss_up, -miss_down, -sm_v])
+
+            # Conclusion: SM_{h,r,c'} for possible horizontal submarines
+            disjuncts = [-hit, -miss_up, -miss_down]
+            for c_start in [c - 2, c - 1, c]:
+                if 0 <= c_start <= board_size - 3:  # SM horizontal needs c_start+2 in bounds
+                    disjuncts.append(get_var(board_size, 5, r, c_start))
+            
+            # Only emit if at least one horizontal option is feasible
+            if len(disjuncts) > 3:
+                cnf.append(disjuncts)
+
     return cnf
 
 
