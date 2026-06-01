@@ -453,7 +453,7 @@ def simulate_game_intelligent(board_size, shots, truth_board, agent_board, use_g
         if unprocessed_hits:
             candidates = get_intelligent_hunt_targets(board_size, agent_board.cnf, shots_taken)
             if candidates:
-                target = candidates[0]  # Take highest priority target
+                target = random.choice(candidates)  # Randomly select from intelligent candidates
                 print(f"Shot {shot_num}: Intelligent hunting target: {target} (hunting around unprocessed hits: {unprocessed_hits})")
 
         # Fallback to random if no hunting target was found.
