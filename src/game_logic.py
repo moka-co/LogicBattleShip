@@ -37,14 +37,16 @@ class TruthBoardFactory:
 class AgentBoardFactory:
     def __init__(self, board_size):
         self.board_size = board_size
-        #self.occupied = set()
         self.cnf = init_empty_board(self.board_size)
         
-        # Place ships physically on the board and add their constraints
-        #pb_factory = PatrolBoatFactory(self.board_size)
-        #sm_factory = SubmarineFactory(self.board_size)
-        #self.occupied = pb_factory.build(self.cnf, self.occupied)
-        #self.occupied = sm_factory.build(self.cnf, self.occupied)
+        # Add ship constraints (but don't place actual ships - agent must deduce locations)
+        from src.ship_types import add_patrol_boat_constraints, add_patrol_boat_non_adjacent_constraints
+        from src.ship_types import add_submarine_constraints, add_submarine_non_adjacent_constraints
+        
+        add_patrol_boat_constraints(self.board_size, self.cnf)
+        add_patrol_boat_non_adjacent_constraints(self.board_size, self.cnf)
+        add_submarine_constraints(self.board_size, self.cnf)
+        add_submarine_non_adjacent_constraints(self.board_size, self.cnf)
         
         # Add Shot/Hit/Miss static constraints (dynamic unit clauses are added later
         # via `record_shot` during gameplay).
