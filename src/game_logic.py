@@ -593,7 +593,7 @@ def simulate_game(board_size, shots, truth_board, agent_board, use_gui=False):
         record_shot(board_size, agent_board.cnf, r, c, was_hit)
         shot_history.append((r, c, was_hit))
         
-        hit_status = "HIT! 🎯" if was_hit else "Miss"
+        hit_status = "HIT!" if was_hit else "Miss"
         print(f"  Result: ({r}, {c}) - {hit_status}")
         
         # Show progress
@@ -603,9 +603,9 @@ def simulate_game(board_size, shots, truth_board, agent_board, use_gui=False):
     # Final status
     final_hits = len([h for h in shot_history if h[2]])
     if final_hits == len(all_ship_cells):
-        print(f"\n🏆 GAME WON! All {len(all_ship_cells)} ship cells destroyed in {len(shot_history)} shots!")
+        print(f"\nGame won! All {len(all_ship_cells)} ship cells destroyed in {len(shot_history)} shots!")
     else:
-        print(f"\n📊 Game ended: {final_hits}/{len(all_ship_cells)} ship cells found in {len(shot_history)} shots")
+        print(f"\nGame ended: {final_hits}/{len(all_ship_cells)} ship cells found in {len(shot_history)} shots")
 
     # Visualize board after shots
     print("\n" + "="*50)
