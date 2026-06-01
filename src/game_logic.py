@@ -644,23 +644,23 @@ class SimulateSimpleGame:
         self.hunt_candidates = []  # Persistent list of hunting candidates
 
         # Run simulate game function
-        self._simulate_game(board_size, shots, truth_board, agent_board, use_gui)
+        self._simulate_game(shots, use_gui)
     
     
     def _get_unit_clause_set(self, cnf):
         """Returns the set of asserted literals (unit clauses) in the CNF."""
         return {clause[0] for clause in cnf.clauses if len(clause) == 1}
 
-    def _simulate_game(self, board_size, shots, truth_board, agent_board, use_gui=False):
+    def _simulate_game(self, shots, use_gui=False):
 
         # Visualize board before shots
         print("Board from the POV of the Truth")
-        visualize_board(board_size, truth_board.cnf)
+        visualize_board(self.board_size, self.truth_board.cnf)
         
         # Get all ship positions from truth board for win condition check
-        truth_unit_clauses = _get_unit_clause_set(truth_board.cnf)
-        all_ship_cells = {(r, c) for r in range(board_size) for c in range(board_size)
-                          if get_var(board_size, 1, r, c) in truth_unit_clauses}
+        truth_unit_clauses = self._get_unit_clause_set(self.truth_board.cnf)
+        all_ship_cells = {(r, c) for r in range(self.board_size) for c in range(self.board_size)
+                          if get_var(self.board_size, 1, r, c) in truth_unit_clauses}
         
         print(f"Total ship cells to find: {len(all_ship_cells)}")
 
@@ -668,19 +668,19 @@ class SimulateSimpleGame:
             target = None
 
             # Check win condition - all ships sunk
-            agent_unit_clauses = _get_unit_clause_set(agent_board.cnf)
-            hit_cells = {(r, c) for r in range(board_size) for c in range(board_size)
-                         if get_var(board_size, 8, r, c) in agent_unit_clauses}
+            agent_unit_clauses = self._get_unit_clause_set(self.agent_board.cnf)
+            hit_cells = {(r, c) for r in range(self.board_size) for c in range(self.board_size)
+                         if get_var(self.board_size, 8, r, c) in agent_unit_clauses}
             
             if all_ship_cells.issubset(hit_cells):
                 print(f"\n🎉 VICTORY! All ships sunk in {len(self.shot_history)} shots!")
                 break
 
             # Update hunt candidates based on current unprocessed hits
-            unprocessed_hits = _get_unprocessed_hits(board_size, agent_board.cnf)
+            unprocessed_hits = _get_unprocessed_hits(self.board_size, self.agent_board.cnf)
             if unprocessed_hits:
                 # Get fresh candidates and merge with existing ones
-                new_candidates = get_simple_hunt_targets(board_size, agent_board.cnf, self.shots_taken)
+                new_candidates = get_simple_hunt_targets(self.board_size, self.agent_board.cnf, self.shots_taken)
                 # Remove already shot candidates and add new ones
                 hunt_candidates = [c for c in self.hunt_candidates if c not in self.shots_taken]
                 for candidate in new_candidates:
@@ -698,7 +698,7 @@ class SimulateSimpleGame:
 
             # Fallback to random if no hunting target was found
             if not target:
-                unshot = [(r, c) for r in range(board_size) for c in range(board_size)
+                unshot = [(r, c) for r in range(self.board_size) for c in range(self.board_size)
                           if (r, c) not in self.shots_taken]
                 if not unshot:
                     print("All cells have been shot.")
@@ -712,8 +712,8 @@ class SimulateSimpleGame:
             r, c = target
             self.shots_taken.add((r, c))
 
-            was_hit = is_ship_part(board_size, truth_board.cnf, r, c)
-            record_shot(board_size, agent_board.cnf, r, c, was_hit)
+            was_hit = is_ship_part(self.board_size, self.truth_board.cnf, r, c)
+            record_shot(self.board_size, self.agent_board.cnf, r, c, was_hit)
             self.shot_history.append((r, c, was_hit))
             
             hit_status = "HIT! 🎯" if was_hit else "Miss"
@@ -735,9 +735,9 @@ class SimulateSimpleGame:
         print("FINAL BOARDS:")
         print("="*50)
         print("Truth board (actual ship positions):")
-        visualize_board(board_size, truth_board.cnf)
+        visualize_board(self.board_size, self.truth_board.cnf)
         print("\nAgent board (discovered information):")
-        visualize_board(board_size, agent_board.cnf)
+        visualize_board(self.board_size, self.agent_board.cnf)
 
         if use_gui:
-            run_gui(board_size, truth_board.cnf, self.shot_history)
+            run_gui(self.board_size, self.truth_board.cnf, self.shot_history)
