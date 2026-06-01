@@ -549,7 +549,7 @@ class SimulateSimpleGame(BaseSimulateGame):
         
         for shot_num in range(1, self.shots + 1):
             if self._all_ships_sunk(all_ship_cells):
-                print(f"🎉 All ships sunk in {len(self.shot_history)} shots!")
+                print(f"All ships sunk in {len(self.shot_history)} shots!")
                 break
             target, active = strategy.get_hunt_candidates(self.board_size, self.agent_board.cnf, self.shots_taken)
             if not active or target is None: break
