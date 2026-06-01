@@ -53,6 +53,8 @@ class AgentVsAgent:
         self.board_size = board_size
         self.max_shots = max_shots
         self.use_gui = use_gui
+        self.strategy_name_1 = strategy_name_1
+        self.strategy_name_2 = strategy_name_2
 
         # Agent 1: has its own ships (truth board) and its own KB (agent board)
         # Agent 1 shoots at Agent 2's truth board, reasoning with its own agent board
@@ -205,4 +207,6 @@ class AgentVsAgent:
             shot_history_1=self.shot_history_1,
             shot_history_2=self.shot_history_2,
             winner_label=self._winner_label,
+            strategy_1=self.strategy_name_1,
+            strategy_2=self.strategy_name_2,
         )

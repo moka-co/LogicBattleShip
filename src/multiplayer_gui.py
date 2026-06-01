@@ -42,7 +42,7 @@ def _get_ship_cells_from_cnf(board_size, cnf):
 
 def run_multiplayer_gui(board_size, truth_cnf_1, truth_cnf_2,
                         shot_history_1, shot_history_2,
-                        winner_label=None):
+                        winner_label=None, strategy_1=None, strategy_2=None):
     """Animates an agent-vs-agent game in a Pygame window.
 
     The left panel shows Agent 2's board (where Agent 1 shoots).
@@ -56,12 +56,14 @@ def run_multiplayer_gui(board_size, truth_cnf_1, truth_cnf_2,
         shot_history_1: List of (row, col, was_hit) for Agent 1's shots.
         shot_history_2: List of (row, col, was_hit) for Agent 2's shots.
         winner_label:   String such as "Agent 1" or "Agent 2" or None for draw.
+        strategy_1:     Strategy name for Agent 1 (optional).
+        strategy_2:     Strategy name for Agent 2 (optional).
     """
     pygame.init()
     pygame.display.set_caption("Battleship — Agent vs Agent")
 
     board_px   = board_size * CELL_SIZE
-    win_width  = board_px * 2 + MARGIN + 40   # 20px padding each side
+    win_width  = board_px * 2 + MARGIN + 40
     win_height = board_px + TOP_BAR + BOTTOM_BAR
 
     screen = pygame.display.set_mode((win_width, win_height))
@@ -69,20 +71,20 @@ def run_multiplayer_gui(board_size, truth_cnf_1, truth_cnf_2,
 
     try:
         font_large = pygame.font.SysFont("consolas", 22, bold=True)
-        font_small = pygame.font.SysFont("consolas", 16)
+        font_small = pygame.font.SysFont("consolas", 15)
+        font_strategy = pygame.font.SysFont("consolas", 13)
         font_win   = pygame.font.SysFont("consolas", 28, bold=True)
     except Exception:
         font_large = pygame.font.Font(None, 26)
-        font_small = pygame.font.Font(None, 20)
+        font_small = pygame.font.Font(None, 19)
+        font_strategy = pygame.font.Font(None, 17)
         font_win   = pygame.font.Font(None, 34)
 
     # Pre-compute ship locations (revealed at end)
-    ships_1 = _get_ship_cells_from_cnf(board_size, truth_cnf_1)  # Agent 1's ships
-    ships_2 = _get_ship_cells_from_cnf(board_size, truth_cnf_2)  # Agent 2's ships
+    ships_1 = _get_ship_cells_from_cnf(board_size, truth_cnf_1)
+    ships_2 = _get_ship_cells_from_cnf(board_size, truth_cnf_2)
 
     # Board origins (top-left corner of the grid)
-    # Left board  = Agent 2's board  (Agent 1 shoots here → shot_history_1)
-    # Right board = Agent 1's board  (Agent 2 shoots here → shot_history_2)
     left_origin_x  = 20
     right_origin_x = 20 + board_px + MARGIN
     origin_y       = TOP_BAR
@@ -98,8 +100,8 @@ def run_multiplayer_gui(board_size, truth_cnf_1, truth_cnf_2,
             r, c, h = shot_history_2[k]
             interleaved.append((2, r, c, h))
 
-    applied_1 = []   # shots applied to Agent 2's board (left panel)
-    applied_2 = []   # shots applied to Agent 1's board (right panel)
+    applied_1 = []
+    applied_2 = []
 
     shot_index     = 0
     last_shot_time = time.time()
@@ -129,7 +131,6 @@ def run_multiplayer_gui(board_size, truth_cnf_1, truth_cnf_2,
                 pygame.draw.rect(screen, colour, rect)
                 pygame.draw.rect(screen, C_GRID, rect, BORDER)
 
-        # Board border
         border_rect = pygame.Rect(origin_x, origin_y, board_px, board_px)
         pygame.draw.rect(screen, accent, border_rect, 2)
 
@@ -137,18 +138,6 @@ def run_multiplayer_gui(board_size, truth_cnf_1, truth_cnf_2,
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-            # Click or key press skips to end
-            if event.type in (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN):
-                if not animation_done:
-                    # Fast-forward: apply all remaining shots
-                    while shot_index < len(interleaved):
-                        agent, r, c, h = interleaved[shot_index]
-                        if agent == 1:
-                            applied_1.append((r, c, h))
-                        else:
-                            applied_2.append((r, c, h))
-                        shot_index += 1
-                    animation_done = True
 
         # Advance animation
         if not animation_done and shot_index < len(interleaved):
@@ -176,13 +165,21 @@ def run_multiplayer_gui(board_size, truth_cnf_1, truth_cnf_2,
         # ── Labels above boards ───────────────────────────────────────────────
         lbl1 = font_large.render("Agent 1 shoots", True, C_LABEL_1)
         lbl2 = font_large.render("Agent 2 shoots", True, C_LABEL_2)
-        screen.blit(lbl1, (left_origin_x,  8))
+        screen.blit(lbl1, (left_origin_x, 8))
         screen.blit(lbl2, (right_origin_x, 8))
 
-        sub1 = font_small.render(f"(Agent 2's board)", True, C_TEXT)
-        sub2 = font_small.render(f"(Agent 1's board)", True, C_TEXT)
-        screen.blit(sub1, (left_origin_x,  34))
-        screen.blit(sub2, (right_origin_x, 34))
+        sub1 = font_small.render("(Agent 2's board)", True, C_TEXT)
+        sub2 = font_small.render("(Agent 1's board)", True, C_TEXT)
+        screen.blit(sub1, (left_origin_x, 28))
+        screen.blit(sub2, (right_origin_x, 28))
+
+        # Strategy labels
+        strat1_text = f"Strategy: {strategy_1}" if strategy_1 else ""
+        strat2_text = f"Strategy: {strategy_2}" if strategy_2 else ""
+        strat1 = font_strategy.render(strat1_text, True, C_LABEL_1)
+        strat2 = font_strategy.render(strat2_text, True, C_LABEL_2)
+        screen.blit(strat1, (left_origin_x, 46))
+        screen.blit(strat2, (right_origin_x, 46))
 
         # Shot counters
         hits_1 = sum(1 for _, _, h in applied_1 if h)
@@ -191,27 +188,21 @@ def run_multiplayer_gui(board_size, truth_cnf_1, truth_cnf_2,
             f"Shots: {len(applied_1)}  Hits: {hits_1}/{len(ships_2)}", True, C_LABEL_1)
         cnt2 = font_small.render(
             f"Shots: {len(applied_2)}  Hits: {hits_2}/{len(ships_1)}", True, C_LABEL_2)
-        screen.blit(cnt1, (left_origin_x,  54))
-        screen.blit(cnt2, (right_origin_x, 54))
+        screen.blit(cnt1, (left_origin_x, 62))
+        screen.blit(cnt2, (right_origin_x, 62))
 
         # ── Bottom bar ────────────────────────────────────────────────────────
-        bottom_y = origin_y + board_px + 10
+        bottom_y = origin_y + board_px + 15
         if animation_done:
             if winner_label:
-                win_surf = font_win.render(
-                    f"{winner_label} wins!", True, C_WIN)
+                win_surf = font_win.render(f"{winner_label} wins!", True, C_WIN)
             else:
                 win_surf = font_win.render("Draw — no winner!", True, C_WIN)
             wx = (win_width - win_surf.get_width()) // 2
             screen.blit(win_surf, (wx, bottom_y))
-
-            hint = font_small.render("Press any key or close window to exit", True, C_TEXT)
-            hx = (win_width - hint.get_width()) // 2
-            screen.blit(hint, (hx, bottom_y + 32))
         else:
             progress = font_small.render(
-                f"Replaying shot {shot_index} / {len(interleaved)} "
-                f"  (click or press any key to skip)", True, C_TEXT)
+                f"Replaying shot {shot_index} / {len(interleaved)}", True, C_TEXT)
             px = (win_width - progress.get_width()) // 2
             screen.blit(progress, (px, bottom_y))
 
