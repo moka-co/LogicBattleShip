@@ -161,14 +161,67 @@ def _is_cell_in_sunk_ship(board_size, cnf, r, c):
 
 
 def _get_open_hits(board_size, cnf):
-    """Returns a list of (r,c) for all Hit cells that are NOT yet covered by a Sunk variable."""
+    """Returns a list of (r,c) for all Hit cells that are NOT yet covered by a Sunk variable.
+    
+    A hit is considered "open" if:
+    1. The cell has been hit (Hit_{r,c} is asserted)
+    2. The cell is not covered by any asserted Sunk variable
+    
+    This correctly handles the case where multiple ships are partially hit - 
+    only the hits belonging to fully sunk ships are removed from the open hits list.
+    """
     unit_clauses = _get_unit_clause_set(cnf)
     open_hits = []
+    
     for r in range(board_size):
         for c in range(board_size):
             hit_var = get_var(board_size, 8, r, c)
-            if hit_var in unit_clauses and not _is_cell_in_sunk_ship(board_size, cnf, r, c):
+            
+            # Check if this cell has been hit
+            if hit_var not in unit_clauses:
+                continue
+                
+            # Check if this hit is covered by any sunk ship
+            is_covered = False
+            
+            # Check all possible sunk ship variables that could cover this cell
+            for sunk_type in [10, 11, 12, 13]:  # All sunk ship types
+                if sunk_type == 10:  # Sunk PB horizontal
+                    # PB_h at (sr,sc) covers (sr,sc) and (sr,sc+1)
+                    # So (r,c) could be covered by PB_h at (r,c) or (r,c-1)
+                    possible_origins = [(r, c), (r, c-1)]
+                    valid_range = lambda sr, sc: 0 <= sr < board_size and 0 <= sc <= board_size - 2
+                elif sunk_type == 11:  # Sunk PB vertical  
+                    # PB_v at (sr,sc) covers (sr,sc) and (sr+1,sc)
+                    # So (r,c) could be covered by PB_v at (r,c) or (r-1,c)
+                    possible_origins = [(r, c), (r-1, c)]
+                    valid_range = lambda sr, sc: 0 <= sr <= board_size - 2 and 0 <= sc < board_size
+                elif sunk_type == 12:  # Sunk SM horizontal
+                    # SM_h at (sr,sc) covers (sr,sc), (sr,sc+1), (sr,sc+2)  
+                    # So (r,c) could be covered by SM_h at (r,c), (r,c-1), or (r,c-2)
+                    possible_origins = [(r, c), (r, c-1), (r, c-2)]
+                    valid_range = lambda sr, sc: 0 <= sr < board_size and 0 <= sc <= board_size - 3
+                else:  # sunk_type == 13, Sunk SM vertical
+                    # SM_v at (sr,sc) covers (sr,sc), (sr+1,sc), (sr+2,sc)
+                    # So (r,c) could be covered by SM_v at (r,c), (r-1,c), or (r-2,c)  
+                    possible_origins = [(r, c), (r-1, c), (r-2, c)]
+                    valid_range = lambda sr, sc: 0 <= sr <= board_size - 3 and 0 <= sc < board_size
+                
+                # Check if any of these sunk variables are asserted
+                for (sr, sc) in possible_origins:
+                    if valid_range(sr, sc):
+                        sunk_var = get_var(board_size, sunk_type, sr, sc)
+                        if sunk_var in unit_clauses:
+                            is_covered = True
+                            break
+                
+                if is_covered:
+                    break
+            
+            # If the hit is not covered by any sunk ship, it's an open hit
+            if not is_covered:
                 open_hits.append((r, c))
+    
     return open_hits
 
 
