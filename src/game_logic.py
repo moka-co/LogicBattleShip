@@ -36,7 +36,7 @@ def visualize_board(board_size, cnf):
 
 
 def is_ship_part(board_size, cnf, r, c):
-    unit_clauses = {clause[0] for clause in cnf.clauses if len(clause) == 1}
+    unit_clauses = {clause[0] for clause in cnf.clauses if len(c) == 1}
     return get_var(board_size, 1, r, c) in unit_clauses
 
 
