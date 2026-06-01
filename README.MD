@@ -203,17 +203,56 @@ Formally, at each turn the agent must select a tile $(i,j)$ such that $\neg Shot
     - Note: technically you can't really know until you hit, for instance the solver could still choose an empty tile, however that is still a good candidate so we can assume that this entailment logically find a tile that must contain a ship part.
 - If no such tile exists, use an heuristic to shot the next tile. The baseline is randomly uniform, see Heuristics section.
 
-**Heuristics**:
-- Randomly uniform: $Choose(i,j) \text{ uniformly from } \{(i,j)| \neg Shot_{i,j}\}$
-- Every Other Two: at each step, if $Hit(i,j)$ and $\neg SP(i,j)$ then choose either $Choose(i+2,j)$ or $Choose(i,j+2)$ if the choosen coordinates are inside the grid. If there is not previously hitten tiles, start from $(0,0)$. 
-- Checkerboard + Intelligent: when no open hits exist, the agent picks from a checkerboard pattern (cells where $(r + c) \mod 2 = 0$), which guarantees any ship of length $\geq 2$ overlaps at least one checkerboard cell. When open hits exist, switches to SAT-guided intelligent hunting.
+### Strategy 1: Simple Random (`--strategy simple`)
+
+The simplest baseline strategy. When open hits exist, the agent enumerates all 8 neighbors (orthogonal + diagonal) of each open hit and picks one uniformly at random. No SAT reasoning is performed — every unshot, in-bounds neighbor is a candidate.
+
+When no open hits exist, the agent falls back to a uniformly random unshot cell:
+
+$$Choose(i,j) \text{ uniformly from } \{(i,j) \mid \neg Shot_{i,j}\}$$
+
+### Strategy 2: Intelligent (`--strategy intelligent`)
+
+When open hits exist, the agent uses the SAT solver to classify each neighbor of an open hit into one of three categories:
+
+1. **Forced** ($KB \land \neg SP_{nr,nc}$ is UNSAT): the cell is logically guaranteed to contain a ship part. These are returned with highest priority.
+2. **Consistent** ($KB \land SP_{nr,nc}$ is SAT): the cell *could* contain a ship part. These are returned only if no forced targets exist.
+3. **Impossible** ($KB \land SP_{nr,nc}$ is UNSAT): the cell is guaranteed empty. Skipped.
+
+The agent picks randomly among the forced targets (if any), otherwise among the consistent targets. When no open hits exist, falls back to a uniformly random unshot cell.
+
+This strategy is implemented in `get_intelligent_hunt_targets()` and wrapped by `BattleshipIntelligentRandomStrategy`.
+
+### Strategy 3: Checkerboard + Intelligent (`--strategy checkerboard`)
+
+A hybrid two-phase strategy:
+
+**Phase 1 — Discovery (checkerboard pattern)**: when no open hits exist, the agent picks from cells where $(r + c) \bmod 2 = 0$. This checkerboard pattern guarantees that any ship occupying $\geq 2$ cells must overlap at least one checkerboard cell, providing efficient board coverage without wasting shots on adjacent cells.
+
+**Phase 2 — Hunting (SAT-guided)**: as soon as an open hit is detected, the agent switches to the same SAT-guided intelligent hunting as Strategy 2 (forced targets first, then consistent targets). Once the damaged ship is fully sunk (all its cells are covered by an asserted Sunk variable), the agent returns to Phase 1.
+
+This strategy is implemented in `BattleshipCheckerboardIntelligentStrategy` and combines `get_checkerboard_targets()` with `get_intelligent_hunt_targets()`.
+
+### Heuristic comparison
+
+| Strategy | Discovery mode | Hunting mode | SAT queries per turn |
+|----------|---------------|--------------|---------------------|
+| Simple | Uniform random | Random neighbors | 0 |
+| Intelligent | Uniform random | SAT-guided (forced/consistent) | Up to 2 per neighbor |
+| Checkerboard + Intelligent | Checkerboard pattern | SAT-guided (forced/consistent) | Up to 2 per neighbor |
 
 
-**SAT Query**:
+### SAT Query (used by Intelligent and Checkerboard strategies)
 
-At each turn, for every unshot tile $(i,j)$, the agents submits: $SOLVE(KB \cup \{\neg SP_{i,j}\})$
-- If $UNSAT \to SP_{i,j}$ is entailed $\to$ shoot(i,j)
-- If $SAT \to SP_{i,j}$ is not guaranteed $\to$ skip (use heuristic)
+For each candidate neighbor $(nr, nc)$ of an open hit, the agent submits two queries using Glucose3's `solve(assumptions=[...])`:
+
+1. **Forced check**: $SOLVE(KB \cup \{\neg SP_{nr,nc}\})$
+   - If $UNSAT$: $KB \models SP_{nr,nc}$ — the cell **must** contain a ship part → shoot immediately
+2. **Consistency check**: $SOLVE(KB \cup \{SP_{nr,nc}\})$
+   - If $SAT$: the cell **could** contain a ship part → add to candidates
+   - If $UNSAT$: $KB \models \neg SP_{nr,nc}$ — the cell is guaranteed empty → skip
+
+The `assumptions` parameter is key: it temporarily assumes a literal for a single solve call without mutating the CNF, allowing the agent to probe many hypotheses without polluting the KB.
 
 ## Tech Stack
 - PySAT for logic solver 
