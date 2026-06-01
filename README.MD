@@ -98,6 +98,18 @@ From the rule of the game we know that:
 **Exactly one Submarine placement**:
 - $(Submarine_{h,0,0} \lor Submarine_{h,0,1} \lor \ldots \lor Submarine_{v,9,7}) \land \neg (Submarine_{h,i,j} \land Submarine_{h,i',j'})$ for all $(i,j) \neq (i',j')$
 
+**Horizontal Battleship**: at position (i,j) horizontal:
+- $Battleship_{h,i,j} \implies (SP_{i,j} \land SP_{i,j+1} \land SP_{i,j+2} \land SP_{i,j+3})$
+
+**Vertical Battleship** at position (i,j) vertical:
+- $Battleship_{v,i,j} \implies (SP_{i,j} \land SP_{i+1,j} \land SP_{i+2,j} \land SP_{i+3,j})$
+
+**There can be only one horizontal or vertical Battleship**:
+- $(\neg Battleship_{v,i,j} \land Battleship_{h,i,j}) \lor (Battleship_{v,i,j} \land \neg Battleship_{h,i,j})$
+
+**Exactly one Battleship placement**:
+- $(Battleship_{h,0,0} \lor Battleship_{h,0,1} \lor \ldots \lor Battleship_{v,9,6}) \land \neg (Battleship_{h,i,j} \land Battleship_{h,i',j'})$ for all $(i,j) \neq (i',j')$
+
 **Cannot place any ships e.g. Submarine and PatrolBoat adjacently**
 - **PatrolBoat horizontal**: $PB_{h,i,j} \implies (\neg SP_{i,j-1} \land \neg SP_{i,j+2} \land \neg SP_{i+1,j} \land \neg SP_{i-1,j} \land \neg SP_{i+1,j+1} \land \neg SP_{i-1,j+1})$
 - **PatrolBoat vertical**: $PB_{v,i,j} \implies (\neg SP_{i-1,j} \land \neg SP_{i+2,j} \land \neg SP_{i,j+1} \land \neg SP_{i,j-1} \land \neg SP_{i+1,j+1} \land \neg SP_{i+1,j-1})$
@@ -128,6 +140,10 @@ If the agent shot and horizontal neighbours are misses, then the ship must be ve
 - $Sunk_{Submarine_{h,i,j}} \iff (Hit_{i,j} \land Hit_{i,j+1} \land Hit_{i,j+2})$ 
 - $Sunk_{Submarine_{v,i,j}} \iff (Hit_{i,j} \land Hit_{i+1,j} \land Hit_{i+2,j})$
 
+**Sunk Battleship (both directions)**
+- $Sunk_{Battleship_{h,i,j}} \iff (Hit_{i,j} \land Hit_{i,j+1} \land Hit_{i,j+2} \land Hit_{i,j+3})$ 
+- $Sunk_{Battleship_{v,i,j}} \iff (Hit_{i,j} \land Hit_{i+1,j} \land Hit_{i+2,j} \land Hit_{i+3,j})$
+
 
 **AllPartsSunk Consequences**
 Once you've hit all parts of a ship, you know the surrounding area is empty:
@@ -138,6 +154,10 @@ $Sunk_{PB_{v,i,j}} \implies \neg SP_{i-1,j} \land \neg SP_{i+2,j} \land \neg SP_
 - Submarine horizontal at (i,j): $Sunk_{SM_{h,i,j}} \implies \neg SP_{i,j-1} \land \neg SP_{i,j+3} \land \neg SP_{i-1,j} \land \neg SP_{i-1,j+1} \land \neg SP_{i-1,j+2} \land \neg SP_{i+1,j} \land \neg SP_{i+1,j+1} \land \neg SP_{i+1,j+2}$
 - Submarine vertical at (i,j):
 $Sunk_{SM_{v,i,j}} \implies \neg SP_{i-1,j} \land \neg SP_{i+3,j} \land \neg SP_{i,j-1} \land \neg SP_{i+1,j-1} \land \neg SP_{i+2,j-1} \land \neg SP_{i,j+1} \land \neg SP_{i+1,j+1} \land \neg SP_{i+2,j+1}$
+- Battleship horizontal at (i,j):
+$Sunk_{BS_{h,i,j}} \implies \neg SP_{i,j-1} \land \neg SP_{i,j+4} \land \neg SP_{i-1,j} \land \neg SP_{i-1,j+1} \land \neg SP_{i-1,j+2} \land \neg SP_{i-1,j+3} \land \neg SP_{i+1,j} \land \neg SP_{i+1,j+1} \land \neg SP_{i+1,j+2} \land \neg SP_{i+1,j+3}$
+- Battleship vertical at (i,j):
+$Sunk_{BS_{v,i,j}} \implies \neg SP_{i-1,j} \land \neg SP_{i+4,j} \land \neg SP_{i,j-1} \land \neg SP_{i+1,j-1} \land \neg SP_{i+2,j-1} \land \neg SP_{i+3,j-1} \land \neg SP_{i,j+1} \land \neg SP_{i+1,j+1} \land \neg SP_{i+2,j+1} \land \neg SP_{i+3,j+1}$
 
 
 ---
