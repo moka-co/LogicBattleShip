@@ -161,9 +161,19 @@ class BattleshipSimpleRandomStrategy(BattleshipStrategy):
             
         return target, True
 
-class BattleshipSimpleRandomStrategy(BattleshipStrategy):
+
+class BattleshipIntelligentRandomStrategy(BattleshipStrategy):
     def get_hunt_candidates(self, board_size, cnf, shots_taken):
+        hunt_candidates = get_intelligent_hunt_targets(board_size, cnf, shots_taken)
+        target = random.choice(hunt_candidates) if hunt_candidates else None
         
+        if not target:
+            unshot = [(r, c) for r in range(board_size) for c in range(board_size) if (r, c) not in shots_taken]
+            if not unshot: return None, False
+            target = random.choice(unshot)
+            
+        return target, True
+
 
 class BaseSimulateGame:
     def __init__(self, board_size, shots, truth_board, agent_board, use_gui=False):
@@ -213,16 +223,13 @@ class SimulateSimpleGame(BaseSimulateGame):
 
 class SimulateIntelligentGame(BaseSimulateGame):
     def simulate(self):
+        strategy = BattleshipIntelligentRandomStrategy()
         all_ship_cells = {(r, c) for r in range(self.board_size) for c in range(self.board_size)
                           if get_var(self.board_size, 1, r, c) in self._get_unit_clause_set(self.truth_board.cnf)}
+        
         for shot_num in range(1, self.shots + 1):
-            candidates = get_intelligent_hunt_targets(self.board_size, self.agent_board.cnf, self.shots_taken)
-            target = random.choice(candidates) if candidates else None
-            if not target:
-                unshot = [(r, c) for r in range(self.board_size) for c in range(self.board_size) if (r, c) not in self.shots_taken]
-                if not unshot: break
-                target = random.choice(unshot)
-            if target is None: break
+            target, active = strategy.get_hunt_candidates(self.board_size, self.agent_board.cnf, self.shots_taken)
+            if not active or target is None: break
             self.shots_taken.add(target)
             r, c = target
             was_hit = is_ship_part(self.board_size, self.truth_board.cnf, r, c)
