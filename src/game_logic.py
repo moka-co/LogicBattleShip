@@ -161,6 +161,9 @@ class BattleshipSimpleRandomStrategy(BattleshipStrategy):
             
         return target, True
 
+class BattleshipSimpleRandomStrategy(BattleshipStrategy):
+    def get_hunt_candidates(self, board_size, cnf, shots_taken):
+        
 
 class BaseSimulateGame:
     def __init__(self, board_size, shots, truth_board, agent_board, use_gui=False):
