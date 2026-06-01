@@ -7,7 +7,7 @@ from src.utils import *
 from src.gui import run_gui
 
 
-class GameFactory:
+class TruthBoardFactory:
     """
     A factory class responsible for initializing the Battleship game state.
 
@@ -34,6 +34,25 @@ class GameFactory:
         self.cnf = add_sinking_constraints(self.board_size, self.cnf)
         self.cnf = add_all_parts_sunk_consequences(self.board_size, self.cnf)
 
+class AgentBoardFactory:
+    def __init__(self, board_size):
+        self.board_size = board_size
+        #self.occupied = set()
+        self.cnf = init_empty_board(self.board_size)
+        
+        # Place ships physically on the board and add their constraints
+        #pb_factory = PatrolBoatFactory(self.board_size)
+        #sm_factory = SubmarineFactory(self.board_size)
+        #self.occupied = pb_factory.build(self.cnf, self.occupied)
+        #self.occupied = sm_factory.build(self.cnf, self.occupied)
+        
+        # Add Shot/Hit/Miss static constraints (dynamic unit clauses are added later
+        # via `record_shot` during gameplay).
+        self.cnf = add_shot_hit_miss_constraints(self.board_size, self.cnf)
+        
+        # Add Sinking Ships biconditionals and AllPartsSunk consequences
+        self.cnf = add_sinking_constraints(self.board_size, self.cnf)
+        self.cnf = add_all_parts_sunk_consequences(self.board_size, self.cnf)
 
 def record_shot(board_size, cnf, r, c, was_hit):
     """Records a shot outcome by appending unit clauses to the CNF.
@@ -199,7 +218,7 @@ def get_hunt_targets(board_size, cnf, shots_taken):
     return candidates
 
 
-def simulate_game(board_size, shots, game_factory, use_gui=False):
+def simulate_game(board_size, shots, truth_board, agent_board, use_gui=False):
     """Run a simulation: random by default, switching to SAT-based hunting after a hit.
 
     Behavior:
@@ -211,7 +230,8 @@ def simulate_game(board_size, shots, game_factory, use_gui=False):
         becomes asserted), revert to random shooting.
     """
     # Visualize board before shots
-    visualize_board(board_size, game_factory.cnf)
+    print("Board from the POV of the Truth")
+    visualize_board(board_size, truth_board.cnf)
 
     shots_taken = set()
     shot_history = []
@@ -220,9 +240,9 @@ def simulate_game(board_size, shots, game_factory, use_gui=False):
         target = None
 
         # Try hunting first if there are open hits (i.e., hits not yet sunk).
-        open_hits = _get_open_hits(board_size, game_factory.cnf)
+        open_hits = _get_open_hits(board_size, agent_board.cnf) # Use agent board 
         if open_hits:
-            candidates = get_hunt_targets(board_size, game_factory.cnf, shots_taken)
+            candidates = get_hunt_targets(board_size, agent_board.cnf, shots_taken)
             if candidates:
                 target = candidates[0]
                 print(f"Hunting target: {target}")
@@ -240,15 +260,19 @@ def simulate_game(board_size, shots, game_factory, use_gui=False):
         r, c = target
         shots_taken.add((r, c))
 
-        was_hit = is_ship_part(board_size, game_factory.cnf, r, c)
-        record_shot(board_size, game_factory.cnf, r, c, was_hit)
+        was_hit = is_ship_part(board_size, truth_board.cnf, r, c)
+        record_shot(board_size, agent_board.cnf, r, c, was_hit)
+        record_shot(board_size, truth_board.cnf, r, c, was_hit)
         shot_history.append((r, c, was_hit))
         print(f"Shot at ({r}, {c}) - Hit: {was_hit}")
 
     # Visualize board after shots
-    visualize_board(board_size, game_factory.cnf)
+    print("Truth board:")
+    visualize_board(board_size, truth_board.cnf)
+    print("Agent Board:")
+    visualize_board(board_size, agent_board.cnf)
 
     if use_gui:
-        run_gui(board_size, game_factory.cnf, shot_history)
+        run_gui(board_size, truth_board.cnf, shot_history) # todo: add also agent board
 
-    return game_factory.cnf
+    return truth_board.cnf
