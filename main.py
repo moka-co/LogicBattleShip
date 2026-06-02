@@ -17,8 +17,6 @@ from src.game_logic import (
 from src.multiplayer import AgentVsAgent
 
 
-
-
 def main():
     """Parses CLI arguments, builds the truth and agent boards, and runs the simulation."""
     parser = argparse.ArgumentParser(description="Battleship SAT Solver")
@@ -31,7 +29,7 @@ def main():
     parser.add_argument(
         "--shots",
         type=int,
-        default=5,
+        default=10*10,
         help="Number of random shots to simulate (default: 5)"
     )
     parser.add_argument(
