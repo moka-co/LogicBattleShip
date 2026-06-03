@@ -30,7 +30,7 @@ def main():
         "--shots",
         type=int,
         default=10*10,
-        help="Number of random shots to simulate (default: 5)"
+        help="Number of random shots to simulate (default: 100)"
     )
     parser.add_argument(
         "--gui",
