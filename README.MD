@@ -4,6 +4,18 @@ This project aims to create a logic agent (propositional logic) for solving the 
 
 We refer to both the agent and the human that plays against the agent as player(s).
 
+## Getting started
+How to run the project, install `uv` and then run this from the root of the project
+```
+uv run main.py --help
+```
+
+A multiplayer (bot vs bot) simulation is done with:
+
+```
+uv run main.py --gui --multiplayer --strategy intelligent --strategy2 checkerboard
+```
+
 ## Battleship Game - Knowledge Engineering
 Battleship game is a 1v1 game where each player has a board composed of $N \times N$ tiles. Before the start of the game, the players can position a number $m$ of ships. (In this case we consider $2 \le m \le 4$ ships).
 Ships are of different kinds and sizes. We distinguish an easier version of the game with a 5x5 board and two kinds of ships: $1\times 2$ and $1\times 4$. Ships must be placed inside the grid. Two ships cannot be placed adjacently and must be separated by a one‑tile distance.
@@ -45,10 +57,10 @@ Sinking an opponent ship may be advantageous because sinking it not only advance
 ---
 
 **Multiplayer**
+Technically the game is multiplayer, and arguably there is environment is multi-agent.
+However since there isn't really anything you can do to defend your board unless winning before the opponent, there is not reason for the agent to keep track of your board. 
 
-The agent maintains two separate boards:
-- Their own board, fully observable that contains the ship placements and which tiles the opponent has shot
-- The opponent's board: partially observable, contains only the tiles the agent has shot, labeled as $Hit$ or $Miss$; all other tiles remain hidden ($H_{i,j}$ is true)
+So the agent maintains only the agent maintains only the opponent's board: partially observable, contains only the tiles the agent has shot, labeled as $Hit$ or $Miss$; all other tiles remain hidden ($H_{i,j}$ is true)
 
 The KB reasoning and SAT queries operate exclusively on the opponent's board.
 
@@ -179,20 +191,22 @@ $Sunk_{CR_{i,j}} \implies \neg SP_{i-1,j} \land \neg SP_{i-1,j+1} \land \neg SP_
 ---
 
 ## Knowledge Base
-- Constraint: propositional logic with PySAT as logic 
-- The agent uses a SAT solver to look for tiles that are shot, if that it tries to shoot adjacent tiles using logic. Otherwise it shot at random.
-- At each turn the KB is updated and the new information is added to the Knowledge Base
+**Important note**: the KB represents only the agent's belief state, not the ground truth.
+
+The program act as "judge" and keep the ground truth + knows everything the agent know.
+
+The agent knows only what it has been observed and ofcourse the rules of the game. In more advanced strategies, the agent uses a SAT solver to look for tiles that are shot (**open hit**) and candidate adjacent tiles that could or could not contains a ship piece. Otherwise it shot at random.
 
 **KB update after each shot**:
 - On a miss: $\text{Assert: } Miss_{i,j}$ which immediately entails: $¬SP_{i,j}$
 - On a hit: $\text{Assert: } Hit_{i,j}$ which immediately entails: $SP_{i,j}$
 - Additionally, after every shot: $\text{Assert: } Shot_{i,j}$
 
-**Input validation**: `record_shot` validates that the cell is within bounds and has not already been shot, raising `ValueError` otherwise.
-
 **Sunk variable propagation**: After each hit, the agent explicitly checks whether any Sunk variables covering the hit cell are now entailed by the KB (via `_propagate_sunk_variables`). This is necessary because sunk variables are defined via biconditionals — the SAT solver can derive their truth internally, but does not add unit clauses to the CNF. The propagation function uses the solver to check $KB \land \neg Sunk_{X}$ for each candidate sunk variable; if UNSAT, the sunk variable is asserted as a unit clause. Only sunk variables whose ship footprint includes the just-hit cell are checked, for efficiency.
 
-The KB grows monotonically, facts are only added never retracted since observations in Battleship are permanent.
+
+**KB grows monotically**: at each turn the KB is updated and the new information is added to the Knowledge Base. Facts are never eliminated from the KB, since observations in Battleship are permanent.
+
 
 **Early termination**: The simulation loop checks after each shot whether all ship cells have been hit. If so, the game ends immediately rather than continuing to fire shots.
 
@@ -261,22 +275,11 @@ The `assumptions` parameter is key: it temporarily assumes a literal for a singl
 ## Evaluation
 - Baseline: pure random (simple strategy)
 - Compare baseline vs intelligent (SAT-guided) vs checkerboard + intelligent
-- Metrics: average turns to win and hit rate over 1000 games
+- Empirically checkerboard wins most of the games, but more tests are required.
+- Battleship game is very luck based so generally speaking the most lucky agent wins
 
 
 ## Conversion to CNF
 - A a tile either contains a ShipPart or is empty: $(SP_{i,j} \land \neg E_{i,j}) \lor (\neg SP_{i,j} \land E_{i,j})$ applying distributed property (distribute the outer OR over inner conunctions) becomes $(SP_{i,j} \lor E_{i,j}) \land (\neg SP_{i,j} \lor \neg E_{i,j}))$
 
 ---
-
-## Implementation Notes
-
-The hunting strategies described above are implemented in `src/game_logic.py`. Key functions:
-
-- `_get_unprocessed_hits(board_size, cnf)` — collects open hits (asserted $Hit_{r,c}$ not covered by any Sunk variable).
-- `get_simple_hunt_targets(board_size, cnf, shots_taken)` — enumerates all 8 neighbors of open hits without SAT reasoning (used by Strategy 1).
-- `get_intelligent_hunt_targets(board_size, cnf, shots_taken)` — performs SAT-guided forced/consistent classification of neighbors (used by Strategies 2 and 3).
-- `get_checkerboard_targets(board_size, shots_taken)` — returns unshot checkerboard cells (used by Strategy 3 in discovery mode).
-- `_propagate_sunk_variables(board_size, cnf, hit_r, hit_c)` — after each hit, checks whether any Sunk variables covering the hit cell are now entailed and asserts them as unit clauses.
-
-The agent transitions between discovery and hunting modes automatically: on each turn, if `_get_unprocessed_hits` returns a non-empty list, the agent hunts; otherwise it discovers.
