@@ -1,0 +1,10 @@
+[project]
+name = "logicbattleship"
+version = "0.1.0"
+description = "Battle Ship Logic Solver"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "python-sat>=1.9.dev4",
+    "pygame>=2.6.0",
+]
