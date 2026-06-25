@@ -112,37 +112,6 @@ def _get_unit_clause_set(cnf):
     return {clause[0] for clause in cnf.clauses if len(clause) == 1}
 
 
-def _sunk_covers_cell(board_size, sunk_type, sr, sc, r, c):
-    """Checks whether a sunk ship at (sr, sc) of the given type covers cell (r, c).
-
-    Args:
-        board_size: The side length of the square board (unused but kept for API consistency).
-        sunk_type: The variable type of the Sunk predicate (10–13, 16–17, 19).
-        sr: Starting row of the sunk ship.
-        sc: Starting column of the sunk ship.
-        r: Row of the cell to check.
-        c: Column of the cell to check.
-
-    Returns:
-        True if the ship at (sr, sc) of the given sunk_type occupies cell (r, c).
-    """
-    if sunk_type == 10:
-        return r == sr and (c == sc or c == sc + 1)
-    if sunk_type == 11:
-        return c == sc and (r == sr or r == sr + 1)
-    if sunk_type == 12:
-        return r == sr and (c == sc or c == sc + 1 or c == sc + 2)
-    if sunk_type == 13:
-        return c == sc and (r == sr or r == sr + 1 or r == sr + 2)
-    if sunk_type == 16:
-        return r == sr and sc <= c <= sc + 3
-    if sunk_type == 17:
-        return c == sc and sr <= r <= sr + 3
-    if sunk_type == 19:
-        return sr <= r <= sr + 1 and sc <= c <= sc + 1
-    return False
-
-
 def _get_sunk_covered_cells(board_size, cnf):
     """Precomputes and returns the set of all cells covered by asserted Sunk variables.
     
@@ -228,31 +197,6 @@ def get_simple_hunt_targets(board_size, cnf, shots_taken):
             seen.add((nr, nc))
             candidates.append((nr, nc))
     return candidates
-
-
-def _get_sunk_ships_status(board_size, cnf):
-    """Returns a dict indicating which ship types have been sunk.
-
-    Scans the CNF unit clauses for any asserted Sunk variable of each ship type.
-
-    Args:
-        board_size: The side length of the square board.
-        cnf: The agent's CNF knowledge base.
-
-    Returns:
-        A dict with keys ``'patrol_boat'``, ``'submarine'``, ``'battleship'``,
-        ``'carrier'``, each mapping to a bool indicating whether that ship type
-        has at least one asserted Sunk variable.
-    """
-    unit_clauses = _get_unit_clause_set(cnf)
-    patrol_boat_sunk = any(get_var(board_size, 10, r, c) in unit_clauses for r in range(board_size) for c in range(board_size - 1)) or \
-                       any(get_var(board_size, 11, r, c) in unit_clauses for r in range(board_size - 1) for c in range(board_size))
-    submarine_sunk = any(get_var(board_size, 12, r, c) in unit_clauses for r in range(board_size) for c in range(board_size - 2)) or \
-                     any(get_var(board_size, 13, r, c) in unit_clauses for r in range(board_size - 2) for c in range(board_size))
-    battleship_sunk = any(get_var(board_size, 16, r, c) in unit_clauses for r in range(board_size) for c in range(board_size - 3)) or \
-                      any(get_var(board_size, 17, r, c) in unit_clauses for r in range(board_size - 3) for c in range(board_size))
-    carrier_sunk = any(get_var(board_size, 19, r, c) in unit_clauses for r in range(board_size - 1) for c in range(board_size - 1))
-    return {'patrol_boat': patrol_boat_sunk, 'submarine': submarine_sunk, 'battleship': battleship_sunk, 'carrier': carrier_sunk}
 
 
 def get_intelligent_hunt_targets(board_size, cnf, shots_taken):
