@@ -231,11 +231,12 @@ def get_intelligent_hunt_targets(board_size, cnf, shots_taken):
                 seen.add((nr, nc))
                 sp_var = get_var(board_size, 1, nr, nc)
                 
-                # Priority 1: Is this cell FORCED to be a ship part? (KB |= SP)
+                # Priority 1: Cell is FORCED (KB ∧ ¬SP is UNSAT → KB |= SP)
                 # Check if KB & ~SP is UNSAT
                 if not solver.solve(assumptions=[-sp_var]):
                     forced_targets.append((nr, nc))
-                # Priority 2: Is this cell CONSISTENT with being a ship part? (KB & SP is SAT)
+                # Priority 2: Cell is CONSISTENT but not forced
+                # (KB ∧ ¬SP is SAT, but KB ∧ SP is also SAT → uncertain, worth trying)
                 elif solver.solve(assumptions=[sp_var]):
                     candidates.append((nr, nc))
 
